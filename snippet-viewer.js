@@ -15,52 +15,90 @@
  *     <snippet-viewer snippet="future-model@futures-model.ts"></snippet-viewer>
  *   </snippet-provider>
  *
- * WordPress usage:
+ * WordPress usage (Option 1 - meta tag, add to theme header):
+ *   <meta name="snippet-host" content="https://your-site.netlify.app">
  *   <script src="https://your-cdn.com/snippet-viewer.js"></script>
+ *
+ * WordPress usage (Option 2 - JavaScript, add to theme header):
+ *   <script src="https://your-cdn.com/snippet-viewer.js"></script>
+ *   <script>SnippetViewer.setDefaultHost('https://your-site.netlify.app');</script>
+ *
+ * Then in any post/page, just use:
+ *   <snippet-viewer snippet="my-code@example.ts"></snippet-viewer>
  *
  * The component will fetch {snippetHost}/snippets.json and look up the snippet by key.
  * When using the provider, the JSON is fetched once and shared across all children.
  */
 (function (global) {
-  'use strict';
+  "use strict";
 
   // Shared cache across all instances (keyed by URL)
   const snippetCache = new Map();
   // Track in-flight requests to prevent duplicate fetches
   const pendingRequests = new Map();
 
+  // Global configuration - can be set before or after script loads
+  const config = {
+    snippetHost: null,
+  };
+
+  /**
+   * Set global snippet host for all viewers.
+   * Call this once in your site header and all snippet-viewers will use it automatically.
+   *
+   * Usage:
+   *   SnippetViewer.setDefaultHost('https://your-site.netlify.app');
+   *
+   * Or via meta tag (parsed automatically):
+   *   <meta name="snippet-host" content="https://your-site.netlify.app">
+   */
+  function setDefaultHost(host) {
+    config.snippetHost = host;
+  }
+
+  function getDefaultHost() {
+    // Check for meta tag if no host configured
+    if (!config.snippetHost) {
+      const meta = document.querySelector('meta[name="snippet-host"]');
+      if (meta) {
+        config.snippetHost = meta.getAttribute("content");
+      }
+    }
+    return config.snippetHost;
+  }
+
   // Prism.js CDN URLs
-  const PRISM_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0';
-  const PRISM_THEME = 'tomorrow'; // Options: 'tomorrow', 'okaidia', 'twilight', 'coy', 'solarizedlight', 'dark'
+  const PRISM_CDN = "https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0";
+  const PRISM_THEME = "tomorrow"; // Options: 'tomorrow', 'okaidia', 'twilight', 'coy', 'solarizedlight', 'dark'
 
   // Map file extensions to Prism language classes
   const languageMap = {
-    'ts': 'typescript',
-    'tsx': 'tsx',
-    'js': 'javascript',
-    'jsx': 'jsx',
-    'json': 'json',
-    'html': 'html',
-    'css': 'css',
-    'scss': 'scss',
-    'py': 'python',
-    'rb': 'ruby',
-    'go': 'go',
-    'rs': 'rust',
-    'java': 'java',
-    'sh': 'bash',
-    'bash': 'bash',
-    'yml': 'yaml',
-    'yaml': 'yaml',
-    'md': 'markdown',
-    'sql': 'sql',
-    'c': 'c',
-    'h': 'c',
-    'cpp': 'cpp',
-    'cc': 'cpp',
-    'cxx': 'cpp',
-    'hpp': 'cpp',
-    'ino': 'arduino',
+    ts: "typescript",
+    tsx: "tsx",
+    js: "javascript",
+    jsx: "jsx",
+    json: "json",
+    html: "html",
+    css: "css",
+    scss: "scss",
+    py: "python",
+    rb: "ruby",
+    go: "go",
+    rs: "rust",
+    java: "java",
+    sh: "bash",
+    bash: "bash",
+    yml: "yaml",
+    yaml: "yaml",
+    md: "markdown",
+    sql: "sql",
+    c: "c",
+    h: "c",
+    cpp: "cpp",
+    cc: "cpp",
+    cxx: "cpp",
+    hpp: "cpp",
+    ino: "arduino",
   };
 
   // Load Prism.js dynamically
@@ -76,21 +114,33 @@
 
     prismLoading = new Promise((resolve, reject) => {
       // Load CSS theme
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
       link.href = `${PRISM_CDN}/themes/prism-${PRISM_THEME}.min.css`;
       document.head.appendChild(link);
 
       // Load core Prism
-      const script = document.createElement('script');
+      const script = document.createElement("script");
       script.src = `${PRISM_CDN}/prism.min.js`;
       script.onload = () => {
         // Load additional language components
-        const languages = ['typescript', 'jsx', 'tsx', 'bash', 'json', 'yaml', 'python', 'java', 'c', 'cpp', 'arduino'];
+        const languages = [
+          "typescript",
+          "jsx",
+          "tsx",
+          "bash",
+          "json",
+          "yaml",
+          "python",
+          "java",
+          "c",
+          "cpp",
+          "arduino",
+        ];
         let loadedCount = 0;
 
-        languages.forEach(lang => {
-          const langScript = document.createElement('script');
+        languages.forEach((lang) => {
+          const langScript = document.createElement("script");
           langScript.src = `${PRISM_CDN}/components/prism-${lang}.min.js`;
           langScript.onload = langScript.onerror = () => {
             loadedCount++;
@@ -111,12 +161,12 @@
 
   class SnippetViewer extends HTMLElement {
     static get observedAttributes() {
-      return ['snippet', 'snippet-host'];
+      return ["snippet", "snippet-host"];
     }
 
     constructor() {
       super();
-      this.attachShadow({ mode: 'open' });
+      this.attachShadow({ mode: "open" });
       this._rendered = false;
     }
 
@@ -134,11 +184,11 @@
     }
 
     get snippet() {
-      return this.getAttribute('snippet') || '';
+      return this.getAttribute("snippet") || "";
     }
 
     get snippetHost() {
-      return this.getAttribute('snippet-host') || '';
+      return this.getAttribute("snippet-host") || getDefaultHost() || "";
     }
 
     async loadSnippet() {
@@ -150,7 +200,7 @@
       const { snippet, snippetHost } = this;
 
       if (!snippet || !snippetHost) {
-        this.renderError('Missing snippet or snippet-host attribute');
+        this.renderError("Missing snippet or snippet-host attribute");
         return;
       }
 
@@ -172,7 +222,7 @@
     }
 
     async fetchSnippets(host) {
-      const url = `${host.replace(/\/$/, '')}/snippets.json`;
+      const url = `${host.replace(/\/$/, "")}/snippets.json`;
 
       // Return from shared cache if available
       if (snippetCache.has(url)) {
@@ -351,28 +401,28 @@
     }
 
     async renderCode(code) {
-      let header = this.shadowRoot?.querySelector('.header');
-      let codeElement = this.shadowRoot?.querySelector('code');
-      let pre = this.shadowRoot?.querySelector('pre');
+      let header = this.shadowRoot?.querySelector(".header");
+      let codeElement = this.shadowRoot?.querySelector("code");
+      let pre = this.shadowRoot?.querySelector("pre");
 
       // Re-render if elements are missing
       if (!header || !codeElement || !pre) {
         this.render();
-        header = this.shadowRoot.querySelector('.header');
-        codeElement = this.shadowRoot.querySelector('code');
-        pre = this.shadowRoot.querySelector('pre');
+        header = this.shadowRoot.querySelector(".header");
+        codeElement = this.shadowRoot.querySelector("code");
+        pre = this.shadowRoot.querySelector("pre");
       }
 
       if (!header || !codeElement || !pre) return;
 
       // Extract filename from snippet key (e.g., "counter-model@counter-model.ts" -> "counter-model.ts")
-      const filename = this.snippet.includes('@')
-        ? this.snippet.split('@')[1]
+      const filename = this.snippet.includes("@")
+        ? this.snippet.split("@")[1]
         : this.snippet;
 
       // Detect language from file extension
-      const ext = filename.split('.').pop()?.toLowerCase() || '';
-      const language = languageMap[ext] || 'javascript';
+      const ext = filename.split(".").pop()?.toLowerCase() || "";
+      const language = languageMap[ext] || "javascript";
 
       header.textContent = filename;
 
@@ -380,7 +430,11 @@
       try {
         const Prism = await loadPrism();
         if (Prism && Prism.languages[language]) {
-          codeElement.innerHTML = Prism.highlight(code, Prism.languages[language], language);
+          codeElement.innerHTML = Prism.highlight(
+            code,
+            Prism.languages[language],
+            language
+          );
         } else {
           codeElement.textContent = code;
         }
@@ -394,41 +448,41 @@
     }
 
     renderError(message) {
-      let header = this.shadowRoot?.querySelector('.header');
-      let pre = this.shadowRoot?.querySelector('pre');
+      let header = this.shadowRoot?.querySelector(".header");
+      let pre = this.shadowRoot?.querySelector("pre");
 
       // Re-render if elements are missing
       if (!header || !pre) {
         this.render();
-        header = this.shadowRoot.querySelector('.header');
-        pre = this.shadowRoot.querySelector('pre');
+        header = this.shadowRoot.querySelector(".header");
+        pre = this.shadowRoot.querySelector("pre");
       }
 
       if (!header || !pre) return;
 
-      header.textContent = 'Error';
+      header.textContent = "Error";
       pre.innerHTML = `<span class="error">${this.escapeHtml(message)}</span>`;
     }
 
     renderLoading() {
-      let header = this.shadowRoot?.querySelector('.header');
-      let pre = this.shadowRoot?.querySelector('pre');
+      let header = this.shadowRoot?.querySelector(".header");
+      let pre = this.shadowRoot?.querySelector("pre");
 
       // Re-render if elements are missing
       if (!header || !pre) {
         this.render();
-        header = this.shadowRoot.querySelector('.header');
-        pre = this.shadowRoot.querySelector('pre');
+        header = this.shadowRoot.querySelector(".header");
+        pre = this.shadowRoot.querySelector("pre");
       }
 
       if (!header || !pre) return;
 
-      header.textContent = 'Loading...';
+      header.textContent = "Loading...";
       pre.innerHTML = '<span class="loading">Loading snippet...</span>';
     }
 
     escapeHtml(text) {
-      const div = document.createElement('div');
+      const div = document.createElement("div");
       div.textContent = text;
       return div.innerHTML;
     }
@@ -442,7 +496,7 @@
    */
   class SnippetProvider extends HTMLElement {
     static get observedAttributes() {
-      return ['snippet-host'];
+      return ["snippet-host"];
     }
 
     constructor() {
@@ -453,7 +507,7 @@
     }
 
     get snippetHost() {
-      return this.getAttribute('snippet-host') || '';
+      return this.getAttribute("snippet-host") || "";
     }
 
     get snippets() {
@@ -473,7 +527,7 @@
     }
 
     attributeChangedCallback(name, oldValue, newValue) {
-      if (oldValue !== newValue && name === 'snippet-host') {
+      if (oldValue !== newValue && name === "snippet-host") {
         this.prefetch();
       }
     }
@@ -482,7 +536,7 @@
       const host = this.snippetHost;
 
       if (!host) {
-        this._error = 'Missing snippet-host attribute on provider';
+        this._error = "Missing snippet-host attribute on provider";
         this._loading = false;
         return;
       }
@@ -491,7 +545,7 @@
         this._loading = true;
         this._error = null;
 
-        const url = `${host.replace(/\/$/, '')}/snippets.json`;
+        const url = `${host.replace(/\/$/, "")}/snippets.json`;
 
         // Use shared cache
         if (snippetCache.has(url)) {
@@ -508,7 +562,9 @@
           const fetchPromise = (async () => {
             const response = await fetch(url);
             if (!response.ok) {
-              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+              throw new Error(
+                `HTTP ${response.status}: ${response.statusText}`
+              );
             }
             const data = await response.json();
             snippetCache.set(url, data);
@@ -532,29 +588,29 @@
     notifyChildren() {
       // Dispatch event for any snippet-viewers that are listening
       this.dispatchEvent(
-        new CustomEvent('snippets-loaded', {
+        new CustomEvent("snippets-loaded", {
           bubbles: false,
           detail: { snippets: this._snippets, error: this._error },
         })
       );
 
       // Also trigger re-render on child snippet-viewers
-      const viewers = this.querySelectorAll('snippet-viewer');
+      const viewers = this.querySelectorAll("snippet-viewer");
       viewers.forEach((viewer) => {
-        if (!viewer.hasAttribute('snippet-host')) {
-          viewer.setAttribute('snippet-host', this.snippetHost);
+        if (!viewer.hasAttribute("snippet-host")) {
+          viewer.setAttribute("snippet-host", this.snippetHost);
         }
       });
     }
   }
 
   // Register custom elements
-  customElements.define('snippet-viewer', SnippetViewer);
-  customElements.define('snippet-provider', SnippetProvider);
+  customElements.define("snippet-viewer", SnippetViewer);
+  customElements.define("snippet-provider", SnippetProvider);
 
   // Expose to global scope for WordPress and CDN usage
   global.SnippetViewer = SnippetViewer;
+  global.SnippetViewer.setDefaultHost = setDefaultHost;
   global.SnippetProvider = SnippetProvider;
   global.snippetCache = snippetCache;
-
-})(typeof window !== 'undefined' ? window : this);
+})(typeof window !== "undefined" ? window : this);

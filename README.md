@@ -53,6 +53,32 @@ Use `<snippet-provider>` to avoid repeating the host:
 </snippet-provider>
 ```
 
+### 4. Site-wide Default (WordPress)
+
+Set a global default host so you don't need provider or attributes on every viewer.
+
+**Option A: Meta tag (recommended)**
+
+Add to your theme header:
+
+```html
+<meta name="snippet-host" content="https://your-site.netlify.app">
+<script src="https://your-site.netlify.app/snippet-viewer.js"></script>
+```
+
+**Option B: JavaScript API**
+
+```html
+<script src="https://your-site.netlify.app/snippet-viewer.js"></script>
+<script>SnippetViewer.setDefaultHost('https://your-site.netlify.app');</script>
+```
+
+Then in any post/page, just use:
+
+```html
+<snippet-viewer snippet="my-function@example.ts"></snippet-viewer>
+```
+
 ## Snippet Key Format
 
 Keys follow the pattern: `name@filename.ext`
@@ -82,7 +108,7 @@ Examples:
 
 ## Supported Languages
 
-TypeScript, JavaScript, JSX, TSX, Java, Python, Ruby, Go, Rust, Bash, JSON, YAML, HTML, CSS, SCSS, SQL, Markdown
+TypeScript, JavaScript, JSX, TSX, Java, Python, Ruby, Go, Rust, C, C++, Arduino, Bash, JSON, YAML, HTML, CSS, SCSS, SQL, Markdown
 
 ## Hosting
 

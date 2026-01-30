@@ -90,6 +90,22 @@
   </div>
 
   <div class="section">
+    <h2>Site-wide Default Host</h2>
+    <p>Set a global default so you don't need provider or attributes on every viewer.</p>
+
+    <p><strong>Option A: Meta tag (recommended)</strong></p>
+    <pre><code>&lt;meta name="snippet-host" content="https://your-site.netlify.app"&gt;
+&lt;script src="https://your-site.netlify.app/snippet-viewer.js"&gt;&lt;/script&gt;</code></pre>
+
+    <p><strong>Option B: JavaScript API</strong></p>
+    <pre><code>&lt;script src="https://your-site.netlify.app/snippet-viewer.js"&gt;&lt;/script&gt;
+&lt;script&gt;SnippetViewer.setDefaultHost('https://your-site.netlify.app');&lt;/script&gt;</code></pre>
+
+    <p>Then use viewers without specifying the host:</p>
+    <pre><code>&lt;snippet-viewer snippet="my-function@example.ts"&gt;&lt;/snippet-viewer&gt;</code></pre>
+  </div>
+
+  <div class="section">
     <h2>Features</h2>
     <ul>
       <li>Syntax highlighting via Prism.js (loaded automatically)</li>
@@ -97,7 +113,8 @@
       <li>Shared cache across all instances</li>
       <li>Shadow DOM isolation (safe for WordPress)</li>
       <li>Provider component for multiple snippets</li>
-      <li>Supports TypeScript, JavaScript, Java, Python, and more</li>
+      <li>Global default host via meta tag or JavaScript API</li>
+      <li>Supports TypeScript, JavaScript, Java, Python, C, C++, Arduino, and more</li>
     </ul>
   </div>
 

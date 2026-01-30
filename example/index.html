@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="snippet-host" id="snippet-host-meta" content="">
   <title>Snippet Viewer Demo</title>
   <style>
     body {
@@ -30,57 +31,52 @@
   <h1>Snippet Viewer Demo</h1>
   <p>This demonstrates the <code>&lt;snippet-viewer&gt;</code> web component.</p>
 
-  <!-- Section 1: Using the provider -->
+  <!-- Section 1: Using default host (simplest) -->
   <div class="section">
-    <h2>With Provider (recommended for multiple snippets)</h2>
-    <p>All viewers inside the provider share the same <code>snippet-host</code>:</p>
+    <h2>Using Default Host (simplest)</h2>
+    <p>With a default host set via meta tag, viewers need no attributes:</p>
 
-    <snippet-provider snippet-host=".">
-      <p>Here's a simple hello world function:</p>
-      <snippet-viewer snippet="hello-world@example.ts"></snippet-viewer>
+    <p>Here's a simple hello world function:</p>
+    <snippet-viewer snippet="hello-world@example.ts"></snippet-viewer>
 
-      <p>And here's a KOS model example:</p>
-      <snippet-viewer snippet="counter@example.ts"></snippet-viewer>
+    <p>And here's a KOS model example:</p>
+    <snippet-viewer snippet="counter@example.ts"></snippet-viewer>
 
-      <p>Using config properties:</p>
-      <snippet-viewer snippet="config-property@example.ts"></snippet-viewer>
+    <p>Using config properties:</p>
+    <snippet-viewer snippet="config-property@example.ts"></snippet-viewer>
 
-      <p>And a Java example:</p>
-      <snippet-viewer snippet="hello-world@Example.java"></snippet-viewer>
-    </snippet-provider>
+    <p>And a Java example:</p>
+    <snippet-viewer snippet="hello-world@Example.java"></snippet-viewer>
   </div>
 
-  <!-- Section 2: Standalone usage -->
+  <!-- Section 2: Using provider -->
   <div class="section">
-    <h2>Standalone (without provider)</h2>
-    <p>Each viewer specifies its own <code>snippet-host</code>:</p>
+    <h2>With Provider (alternative approach)</h2>
+    <p>Providers can still be used to override the default or group snippets:</p>
 
-    <snippet-viewer snippet="react-component@example.tsx" snippet-host="."></snippet-viewer>
+    <snippet-provider id="local-provider">
+      <snippet-viewer snippet="react-component@example.tsx"></snippet-viewer>
+    </snippet-provider>
   </div>
 
   <!-- Section 3: Mixed sources -->
   <div class="section">
-    <h2>Mixed Sources</h2>
-    <p>Provider with a local override (this one will fail since the host doesn't exist):</p>
+    <h2>Override Default Host</h2>
+    <p>Individual viewers can override the default (this one will fail since the host doesn't exist):</p>
 
-    <snippet-provider snippet-host=".">
-      <snippet-viewer snippet="hello-world@example.ts"></snippet-viewer>
-      <p>This next one uses a different host (will show error):</p>
-      <snippet-viewer snippet="some-snippet" snippet-host="https://nonexistent.example.com"></snippet-viewer>
-    </snippet-provider>
+    <snippet-viewer snippet="some-snippet" snippet-host="https://nonexistent.example.com"></snippet-viewer>
   </div>
 
   <!-- Load the component -->
+  <script>
+    // Set default host via meta tag before loading the component
+    const baseUrl = new URL('./', window.location.href).href;
+    document.getElementById('snippet-host-meta').content = baseUrl;
+  </script>
   <script src="/snippet-viewer.js"></script>
   <script>
-    // Set snippet-host based on current page location (handles trailing slash issues)
-    const baseUrl = new URL('./', window.location.href).href;
-    document.querySelectorAll('snippet-provider[snippet-host="."]').forEach(el => {
-      el.setAttribute('snippet-host', baseUrl);
-    });
-    document.querySelectorAll('snippet-viewer[snippet-host="."]').forEach(el => {
-      el.setAttribute('snippet-host', baseUrl);
-    });
+    // Also set the provider's host for the provider example
+    document.getElementById('local-provider').setAttribute('snippet-host', baseUrl);
   </script>
 </body>
 </html>

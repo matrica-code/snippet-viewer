@@ -63,7 +63,7 @@
   <div class="section">
     <h2>Installation</h2>
     <p>Add the script to your page:</p>
-    <pre><code>&lt;script src="https://your-site.netlify.app/snippet-viewer.js"&gt;&lt;/script&gt;</code></pre>
+    <pre><code>&lt;script src="<span class="host-url"></span>/snippet-viewer.js"&gt;&lt;/script&gt;</code></pre>
   </div>
 
   <div class="section">
@@ -76,14 +76,14 @@
     <p>Use the component:</p>
     <pre><code>&lt;snippet-viewer
   snippet="my-function@example.ts"
-  snippet-host="https://your-site.com/snippets"&gt;
+  snippet-host="<span class="host-url"></span>"&gt;
 &lt;/snippet-viewer&gt;</code></pre>
   </div>
 
   <div class="section">
     <h2>With Provider (Multiple Snippets)</h2>
     <p>Use a provider to share the host across multiple viewers:</p>
-    <pre><code>&lt;snippet-provider snippet-host="https://your-site.com/snippets"&gt;
+    <pre><code>&lt;snippet-provider snippet-host="<span class="host-url"></span>"&gt;
   &lt;snippet-viewer snippet="function-a@file.ts"&gt;&lt;/snippet-viewer&gt;
   &lt;snippet-viewer snippet="function-b@file.ts"&gt;&lt;/snippet-viewer&gt;
 &lt;/snippet-provider&gt;</code></pre>
@@ -94,12 +94,12 @@
     <p>Set a global default so you don't need provider or attributes on every viewer.</p>
 
     <p><strong>Option A: Meta tag (recommended)</strong></p>
-    <pre><code>&lt;meta name="snippet-host" content="https://your-site.netlify.app"&gt;
-&lt;script src="https://your-site.netlify.app/snippet-viewer.js"&gt;&lt;/script&gt;</code></pre>
+    <pre><code>&lt;meta name="snippet-host" content="<span class="host-url"></span>"&gt;
+&lt;script src="<span class="host-url"></span>/snippet-viewer.js"&gt;&lt;/script&gt;</code></pre>
 
     <p><strong>Option B: JavaScript API</strong></p>
-    <pre><code>&lt;script src="https://your-site.netlify.app/snippet-viewer.js"&gt;&lt;/script&gt;
-&lt;script&gt;SnippetViewer.setDefaultHost('https://your-site.netlify.app');&lt;/script&gt;</code></pre>
+    <pre><code>&lt;script src="<span class="host-url"></span>/snippet-viewer.js"&gt;&lt;/script&gt;
+&lt;script&gt;SnippetViewer.setDefaultHost('<span class="host-url"></span>');&lt;/script&gt;</code></pre>
 
     <p>Then use viewers without specifying the host:</p>
     <pre><code>&lt;snippet-viewer snippet="my-function@example.ts"&gt;&lt;/snippet-viewer&gt;</code></pre>
@@ -126,5 +126,12 @@
       <li><code>filename.ext</code> - Displayed in header, extension determines syntax highlighting</li>
     </ul>
   </div>
+
+  <script>
+    // Populate all host-url placeholders with the current origin
+    document.querySelectorAll('.host-url').forEach(el => {
+      el.textContent = window.location.origin;
+    });
+  </script>
 </body>
 </html>

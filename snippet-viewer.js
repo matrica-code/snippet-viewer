@@ -58,8 +58,13 @@
 
   // Load Prism.js dynamically
   let prismLoading = null;
+  let prismReady = false;
+
   async function loadPrism() {
-    if (global.Prism) return global.Prism;
+    // If fully loaded, return immediately
+    if (prismReady && global.Prism) return global.Prism;
+
+    // If loading in progress, wait for it
     if (prismLoading) return prismLoading;
 
     prismLoading = new Promise((resolve, reject) => {
@@ -75,16 +80,20 @@
       script.onload = () => {
         // Load additional language components
         const languages = ['typescript', 'jsx', 'tsx', 'bash', 'json', 'yaml', 'python', 'java'];
-        const langPromises = languages.map(lang => {
-          return new Promise((res) => {
-            const langScript = document.createElement('script');
-            langScript.src = `${PRISM_CDN}/components/prism-${lang}.min.js`;
-            langScript.onload = res;
-            langScript.onerror = res; // Continue even if language fails
-            document.head.appendChild(langScript);
-          });
+        let loadedCount = 0;
+
+        languages.forEach(lang => {
+          const langScript = document.createElement('script');
+          langScript.src = `${PRISM_CDN}/components/prism-${lang}.min.js`;
+          langScript.onload = langScript.onerror = () => {
+            loadedCount++;
+            if (loadedCount === languages.length) {
+              prismReady = true;
+              resolve(global.Prism);
+            }
+          };
+          document.head.appendChild(langScript);
         });
-        Promise.all(langPromises).then(() => resolve(global.Prism));
       };
       script.onerror = reject;
       document.head.appendChild(script);

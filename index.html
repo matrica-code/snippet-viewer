@@ -106,9 +106,23 @@
   </div>
 
   <div class="section">
+    <h2>Theme Configuration</h2>
+    <p>Customize the syntax highlighting theme (must be set before snippets load).</p>
+
+    <p><strong>Option A: Meta tag</strong></p>
+    <pre><code>&lt;meta name="snippet-theme" content="okaidia"&gt;</code></pre>
+
+    <p><strong>Option B: JavaScript API</strong></p>
+    <pre><code>&lt;script&gt;SnippetViewer.setTheme('okaidia');&lt;/script&gt;</code></pre>
+
+    <p>Available themes: <code>tomorrow</code> (default), <code>okaidia</code>, <code>twilight</code>, <code>coy</code>, <code>solarizedlight</code>, <code>dark</code></p>
+  </div>
+
+  <div class="section">
     <h2>Features</h2>
     <ul>
       <li>Syntax highlighting via Prism.js (loaded automatically)</li>
+      <li>Configurable themes (tomorrow, okaidia, twilight, coy, solarizedlight, dark)</li>
       <li>Auto-detects language from file extension</li>
       <li>Shared cache across all instances</li>
       <li>Shadow DOM isolation (safe for WordPress)</li>

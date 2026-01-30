@@ -17,11 +17,17 @@
  *
  * WordPress usage (Option 1 - meta tag, add to theme header):
  *   <meta name="snippet-host" content="https://your-site.netlify.app">
+ *   <meta name="snippet-theme" content="okaidia">
  *   <script src="https://your-cdn.com/snippet-viewer.js"></script>
  *
  * WordPress usage (Option 2 - JavaScript, add to theme header):
  *   <script src="https://your-cdn.com/snippet-viewer.js"></script>
- *   <script>SnippetViewer.setDefaultHost('https://your-site.netlify.app');</script>
+ *   <script>
+ *     SnippetViewer.setDefaultHost('https://your-site.netlify.app');
+ *     SnippetViewer.setTheme('okaidia');
+ *   </script>
+ *
+ * Available themes: 'tomorrow' (default), 'okaidia', 'twilight', 'coy', 'solarizedlight', 'dark'
  *
  * Then in any post/page, just use:
  *   <snippet-viewer snippet="my-code@example.ts"></snippet-viewer>
@@ -40,7 +46,11 @@
   // Global configuration - can be set before or after script loads
   const config = {
     snippetHost: null,
+    theme: null,
   };
+
+  // Default theme if none configured
+  const DEFAULT_THEME = "tomorrow"; // Options: 'tomorrow', 'okaidia', 'twilight', 'coy', 'solarizedlight', 'dark'
 
   /**
    * Set global snippet host for all viewers.
@@ -67,9 +77,35 @@
     return config.snippetHost;
   }
 
+  /**
+   * Set global Prism.js theme for syntax highlighting.
+   * Must be called BEFORE any snippet-viewer elements are rendered.
+   *
+   * Usage:
+   *   SnippetViewer.setTheme('okaidia');
+   *
+   * Or via meta tag (parsed automatically):
+   *   <meta name="snippet-theme" content="okaidia">
+   *
+   * Available themes: 'tomorrow', 'okaidia', 'twilight', 'coy', 'solarizedlight', 'dark'
+   */
+  function setTheme(theme) {
+    config.theme = theme;
+  }
+
+  function getTheme() {
+    // Check for meta tag if no theme configured
+    if (!config.theme) {
+      const meta = document.querySelector('meta[name="snippet-theme"]');
+      if (meta) {
+        config.theme = meta.getAttribute("content");
+      }
+    }
+    return config.theme || DEFAULT_THEME;
+  }
+
   // Prism.js CDN URLs
   const PRISM_CDN = "https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0";
-  const PRISM_THEME = "tomorrow"; // Options: 'tomorrow', 'okaidia', 'twilight', 'coy', 'solarizedlight', 'dark'
 
   // Map file extensions to Prism language classes
   const languageMap = {
@@ -113,13 +149,7 @@
     if (prismLoading) return prismLoading;
 
     prismLoading = new Promise((resolve, reject) => {
-      // Load CSS theme
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = `${PRISM_CDN}/themes/prism-${PRISM_THEME}.min.css`;
-      document.head.appendChild(link);
-
-      // Load core Prism
+      // Load core Prism (CSS theme is loaded in each shadow DOM)
       const script = document.createElement("script");
       script.src = `${PRISM_CDN}/prism.min.js`;
       script.onload = () => {
@@ -253,7 +283,9 @@
     }
 
     render() {
+      const theme = getTheme();
       this.shadowRoot.innerHTML = `
+        <link rel="stylesheet" href="${PRISM_CDN}/themes/prism-${theme}.min.css">
         <style>
           :host {
             display: block;
@@ -278,7 +310,6 @@
             margin: 0;
             padding: 16px;
             overflow-x: auto;
-            background: #1d1f21 !important;
           }
 
           code {
@@ -286,7 +317,6 @@
             font-size: 14px;
             line-height: 1.5;
             white-space: pre;
-            background: transparent !important;
           }
 
           .error {
@@ -296,101 +326,6 @@
 
           .loading {
             color: #586069;
-          }
-
-          /* Prism Tomorrow theme (embedded for Shadow DOM) */
-          code[class*="language-"],
-          pre[class*="language-"] {
-            color: #c5c8c6;
-            text-shadow: 0 1px rgba(0, 0, 0, 0.3);
-            direction: ltr;
-            text-align: left;
-            white-space: pre;
-            word-spacing: normal;
-            word-break: normal;
-            tab-size: 4;
-            hyphens: none;
-          }
-
-          .token.comment,
-          .token.block-comment,
-          .token.prolog,
-          .token.doctype,
-          .token.cdata {
-            color: #969896;
-          }
-
-          .token.punctuation {
-            color: #c5c8c6;
-          }
-
-          .token.tag,
-          .token.attr-name,
-          .token.namespace,
-          .token.deleted {
-            color: #e2777a;
-          }
-
-          .token.function-name {
-            color: #6196cc;
-          }
-
-          .token.boolean,
-          .token.number,
-          .token.function {
-            color: #de935f;
-          }
-
-          .token.property,
-          .token.class-name,
-          .token.constant,
-          .token.symbol {
-            color: #f0c674;
-          }
-
-          .token.selector,
-          .token.important,
-          .token.atrule,
-          .token.keyword,
-          .token.builtin {
-            color: #b294bb;
-          }
-
-          .token.string,
-          .token.char,
-          .token.attr-value,
-          .token.regex,
-          .token.variable {
-            color: #b5bd68;
-          }
-
-          .token.operator,
-          .token.entity,
-          .token.url {
-            color: #8abeb7;
-          }
-
-          .token.important,
-          .token.bold {
-            font-weight: bold;
-          }
-
-          .token.italic {
-            font-style: italic;
-          }
-
-          .token.entity {
-            cursor: help;
-          }
-
-          .token.inserted {
-            color: #b5bd68;
-          }
-
-          /* Decorators/Annotations */
-          .token.decorator,
-          .token.annotation {
-            color: #cc99cd;
           }
         </style>
         <div class="container">
@@ -611,6 +546,7 @@
   // Expose to global scope for WordPress and CDN usage
   global.SnippetViewer = SnippetViewer;
   global.SnippetViewer.setDefaultHost = setDefaultHost;
+  global.SnippetViewer.setTheme = setTheme;
   global.SnippetProvider = SnippetProvider;
   global.snippetCache = snippetCache;
 })(typeof window !== "undefined" ? window : this);

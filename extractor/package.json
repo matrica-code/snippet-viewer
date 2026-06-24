@@ -1,6 +1,6 @@
 {
   "name": "@matrica-code/snippet-extractor",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "type": "module",
   "description": "Multi-language (JS/TS/TSX/Java) extract-code snippet harvester. Produces the snippets.json consumed by snippet-viewer.",
   "keywords": [

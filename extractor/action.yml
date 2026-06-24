@@ -22,6 +22,23 @@ inputs:
     description: "Tag of ghcr.io/matrica-code/snippet-extractor to run. Pin to a version for reproducibility."
     required: false
     default: "latest"
+  upload-artifact:
+    description: "Upload the generated snippet file as a workflow artifact."
+    required: false
+    default: "false"
+  artifact-name:
+    description: "Name for the uploaded artifact (when upload-artifact is true)."
+    required: false
+    default: "snippets"
+  artifact-retention-days:
+    description: "Days to retain the uploaded artifact (when upload-artifact is true)."
+    required: false
+    default: "90"
+
+outputs:
+  snippet-file:
+    description: "Path (repo-root relative) of the generated snippet file."
+    value: ${{ inputs.snippet-file }}
 
 runs:
   using: composite
@@ -44,3 +61,12 @@ runs:
           $reset_flag \
           "--snippetFile=/work/$SNIPPET_FILE" \
           "${work_paths[@]}"
+
+    - name: Upload snippet artifact
+      if: ${{ inputs.upload-artifact == 'true' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.snippet-file }}
+        retention-days: ${{ inputs.artifact-retention-days }}
+        if-no-files-found: error

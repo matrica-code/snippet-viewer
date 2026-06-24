@@ -50,14 +50,10 @@ jobs:
         with:
           snippet-file: snippets.json # output path, relative to repo root
           paths: src # space-separated dirs/files to scan
+          upload-artifact: "true" # also upload the result as a workflow artifact
           # reset: "true"            # start from {} (default); set "false" to merge
+          # artifact-name: snippets  # artifact name (default: snippets)
           # image-tag: "1.0.0"       # which ghcr.io image tag to run (default: latest)
-
-      # then commit the file, or upload it, or deploy it to your snippet-viewer host
-      - uses: actions/upload-artifact@v4
-        with:
-          name: snippets
-          path: snippets.json
 ```
 
 A **Java repo** is identical — just point `paths` at the sources:
@@ -72,6 +68,33 @@ A **Java repo** is identical — just point `paths` at the sources:
 The action requires a Linux runner with Docker available (GitHub-hosted
 `ubuntu-latest` has it). It pulls `ghcr.io/matrica-code/snippet-extractor` and
 runs it over your checked-out workspace.
+
+#### Action inputs
+
+| Input                     | Default         | Description                                                    |
+| ------------------------- | --------------- | -------------------------------------------------------------- |
+| `snippet-file`            | `snippets.json` | Output JSON path, relative to the repo root.                   |
+| `paths`                   | `.`             | Space-separated dirs/files to scan, relative to the repo root. |
+| `reset`                   | `true`          | Start from `{}`; set `false` to merge into an existing file.   |
+| `image-tag`               | `latest`        | Which `ghcr.io/matrica-code/snippet-extractor` tag to run.     |
+| `upload-artifact`         | `false`         | Upload the generated file as a workflow artifact.              |
+| `artifact-name`           | `snippets`      | Artifact name (when `upload-artifact` is `true`).              |
+| `artifact-retention-days` | `90`            | Artifact retention (when `upload-artifact` is `true`).         |
+
+The generated file also stays in the workspace at `$GITHUB_WORKSPACE/<snippet-file>`,
+so a later step in the same job can read it directly — commit it, deploy it to your
+snippet-viewer host, or push it to a blob store (S3/R2/GCS/Azure). The action exposes
+its path as the `snippet-file` output too.
+
+A later step can grab it via the output:
+
+```yaml
+- id: snippets
+  uses: matrica-code/snippet-viewer/extractor@main
+  with:
+    paths: src
+- run: aws s3 cp "${{ steps.snippets.outputs.snippet-file }}" s3://my-bucket/snippets.json --content-type application/json
+```
 
 ### Via npm / npx (Node repos)
 

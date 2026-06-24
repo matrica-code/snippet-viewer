@@ -2,6 +2,11 @@
 
 A vanilla web component for displaying syntax-highlighted code snippets from a JSON file. Designed for use in WordPress and static sites.
 
+This repo is two halves of one pipeline:
+
+- **Viewer (this component)** — the _consumer_: renders a `snippets.json` keyed `name@filename.ext`.
+- **[`extractor/`](extractor/README.md)** — the _producer_: harvests `// extract-code` markers from your source (JS/TS/TSX/Java) into exactly that `snippets.json`. Runs as an npm package (`npx @matrica-code/snippet-extractor`), a GitHub Action, or a container image.
+
 ## Features
 
 - Syntax highlighting via Prism.js (loaded automatically from CDN)
@@ -35,7 +40,8 @@ Include the script in your HTML:
 ```html
 <snippet-viewer
   snippet="hello-world@example.ts"
-  snippet-host="https://your-site.com/path/to/snippets">
+  snippet-host="https://your-site.com/path/to/snippets"
+>
 </snippet-viewer>
 ```
 
@@ -62,7 +68,7 @@ Set a global default host so you don't need provider or attributes on every view
 Add to your theme header:
 
 ```html
-<meta name="snippet-host" content="https://your-site.netlify.app">
+<meta name="snippet-host" content="https://your-site.netlify.app" />
 <script src="https://your-site.netlify.app/snippet-viewer.js"></script>
 ```
 
@@ -70,7 +76,9 @@ Add to your theme header:
 
 ```html
 <script src="https://your-site.netlify.app/snippet-viewer.js"></script>
-<script>SnippetViewer.setDefaultHost('https://your-site.netlify.app');</script>
+<script>
+  SnippetViewer.setDefaultHost("https://your-site.netlify.app");
+</script>
 ```
 
 Then in any post/page, just use:
@@ -87,6 +95,7 @@ Keys follow the pattern: `name@filename.ext`
 - **filename.ext**: Displayed in the header; extension determines syntax highlighting
 
 Examples:
+
 - `counter-model@counter.ts` → TypeScript highlighting
 - `main-class@App.java` → Java highlighting
 - `config@settings.json` → JSON highlighting
@@ -95,15 +104,15 @@ Examples:
 
 ### `<snippet-viewer>`
 
-| Attribute | Description |
-|-----------|-------------|
-| `snippet` | Key to look up in the JSON file |
+| Attribute      | Description                               |
+| -------------- | ----------------------------------------- |
+| `snippet`      | Key to look up in the JSON file           |
 | `snippet-host` | Base URL where `snippets.json` is located |
 
 ### `<snippet-provider>`
 
-| Attribute | Description |
-|-----------|-------------|
+| Attribute      | Description                                               |
+| -------------- | --------------------------------------------------------- |
 | `snippet-host` | Shared base URL for all child `<snippet-viewer>` elements |
 
 ## Supported Languages

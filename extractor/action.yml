@@ -1,0 +1,46 @@
+name: "Extract Snippets"
+description: "Harvest // extract-code snippets into a snippets.json (JS/TS/TSX/Java) for snippet-viewer."
+author: "matrica-code"
+branding:
+  icon: "scissors"
+  color: "purple"
+
+inputs:
+  snippet-file:
+    description: "Output JSON path, relative to the repo root (e.g. docs/snippets.json)."
+    required: false
+    default: "snippets.json"
+  paths:
+    description: "Space-separated dirs/files to scan, relative to the repo root."
+    required: false
+    default: "."
+  reset:
+    description: "Start from an empty {} instead of merging into an existing file."
+    required: false
+    default: "true"
+  image-tag:
+    description: "Tag of ghcr.io/matrica-code/snippet-extractor to run. Pin to a version for reproducibility."
+    required: false
+    default: "latest"
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        SNIPPET_FILE: ${{ inputs.snippet-file }}
+        PATHS: ${{ inputs.paths }}
+        RESET: ${{ inputs.reset }}
+        IMAGE: ghcr.io/matrica-code/snippet-extractor:${{ inputs.image-tag }}
+      run: |
+        set -euo pipefail
+        reset_flag=""
+        [ "$RESET" = "true" ] && reset_flag="--reset"
+        # Map each requested path into the mounted /work root.
+        work_paths=()
+        for p in $PATHS; do work_paths+=("/work/$p"); done
+        docker pull "$IMAGE"
+        docker run --rm -v "$PWD":/work "$IMAGE" \
+          $reset_flag \
+          "--snippetFile=/work/$SNIPPET_FILE" \
+          "${work_paths[@]}"

@@ -1,0 +1,47 @@
+{
+  "name": "@matrica-code/snippet-extractor",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Multi-language (JS/TS/TSX/Java) extract-code snippet harvester. Produces the snippets.json consumed by snippet-viewer.",
+  "keywords": [
+    "snippets",
+    "code-snippets",
+    "documentation",
+    "tree-sitter",
+    "codemod",
+    "extract-code",
+    "snippet-viewer"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/matrica-code/snippet-viewer.git",
+    "directory": "extractor"
+  },
+  "homepage": "https://github.com/matrica-code/snippet-viewer/tree/main/extractor#readme",
+  "bugs": {
+    "url": "https://github.com/matrica-code/snippet-viewer/issues"
+  },
+  "bin": {
+    "extract-snippets": "extractSnippets.mjs"
+  },
+  "files": [
+    "extractSnippets.mjs",
+    "README.md"
+  ],
+  "scripts": {
+    "extract": "node extractSnippets.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "tree-sitter": "0.25.0",
+    "tree-sitter-java": "0.23.5",
+    "tree-sitter-javascript": "0.25.0",
+    "tree-sitter-typescript": "0.23.2"
+  }
+}

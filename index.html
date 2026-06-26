@@ -106,6 +106,37 @@
   </div>
 
   <div class="section">
+    <h2>Named Sources (Multiple Files)</h2>
+    <p>When snippets live in more than one file (e.g. one per language or product), give each file a name and reference it with a <code>source</code> attribute. The mapping lives in one place, so posts never hardcode URLs.</p>
+
+    <p><strong>Option A: Manifest (recommended)</strong> &mdash; register once in your theme header:</p>
+    <pre><code>&lt;meta name="snippet-sources" content="<span class="host-url"></span>/sources.json"&gt;</code></pre>
+    <p>where <code>sources.json</code> maps names to URLs:</p>
+    <pre><code>{
+  "java": "<span class="host-url"></span>/java-snippets.json",
+  "frontend": "<span class="host-url"></span>/frontend-snippets.json"
+}</code></pre>
+
+    <p><strong>Option B: JavaScript API</strong></p>
+    <pre><code>&lt;script&gt;
+  SnippetViewer.setSources({
+    java: '<span class="host-url"></span>/java-snippets.json',
+    frontend: '<span class="host-url"></span>/frontend-snippets.json',
+  });
+&lt;/script&gt;</code></pre>
+
+    <p>Then name a <code>source</code> per viewer &mdash; or set a default on a provider and override it on a single viewer:</p>
+    <pre><code>&lt;snippet-viewer source="java" snippet="widget-service@WidgetService.java"&gt;&lt;/snippet-viewer&gt;
+
+&lt;snippet-provider source="frontend"&gt;
+  &lt;snippet-viewer snippet="counter@Counter.tsx"&gt;&lt;/snippet-viewer&gt;
+  &lt;snippet-viewer source="java" snippet="describe@WidgetMembers.java"&gt;&lt;/snippet-viewer&gt;
+&lt;/snippet-provider&gt;</code></pre>
+
+    <p>A <code>source</code> wins over <code>snippet-host</code>; without one, the legacy <code><span class="host-url"></span>/snippets.json</code> path is used, so existing pages keep working. Each file is fetched once and cached by URL.</p>
+  </div>
+
+  <div class="section">
     <h2>Theme Configuration</h2>
     <p>Customize the syntax highlighting theme (must be set before snippets load).</p>
 
@@ -128,6 +159,7 @@
       <li>Shadow DOM isolation (safe for WordPress)</li>
       <li>Provider component for multiple snippets</li>
       <li>Global default host via meta tag or JavaScript API</li>
+      <li>Named sources for pulling from multiple snippet files via one manifest</li>
       <li>Supports TypeScript, JavaScript, Java, Python, C, C++, Arduino, and more</li>
     </ul>
   </div>

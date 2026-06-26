@@ -1,0 +1,104 @@
+name: extractor-smoke-test
+
+# Manual end-to-end test of the PUBLISHED snippet-extractor action.
+# Runs `matrica-code/snippet-viewer/extractor@main` over the fixtures in
+# .github/smoke-test/fixtures (TypeScript + Java, covering class / method /
+# property markers and decorators/annotations), asserts the output is correct,
+# and attaches the generated snippets.json as a workflow artifact.
+#
+# Three jobs:
+#   both-languages  — scans every fixture (9 snippets)
+#   typescript-only — scans just the TS/TSX fixtures (6 snippets)
+#   java-only       — scans just the Java fixtures (3 snippets)
+#
+# Run it from the Actions tab → "extractor-smoke-test" → "Run workflow".
+
+on:
+  workflow_dispatch:
+    inputs:
+      image-tag:
+        description: "snippet-extractor image tag to test (e.g. latest, 1.0.2)."
+        required: false
+        default: "latest"
+
+jobs:
+  both-languages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The action under test. Pin to extractor-vX.Y.Z to test a specific release;
+      # `@main` always tests the current action definition on the default branch.
+      - id: extract
+        name: Run published snippet-extractor action (TS + Java)
+        uses: matrica-code/snippet-viewer/extractor@main
+        with:
+          paths: .github/smoke-test/fixtures
+          snippet-file: smoke-test-snippets.json
+          reset: "true"
+          image-tag: ${{ inputs.image-tag }}
+          upload-artifact: "true"
+          artifact-name: smoke-test-snippets-all
+          artifact-retention-days: "7"
+
+      - name: Show generated snippets
+        run: |
+          echo "Action reported output path: ${{ steps.extract.outputs.snippet-file }}"
+          echo "::group::smoke-test-snippets.json"
+          cat smoke-test-snippets.json
+          echo "::endgroup::"
+
+      - name: Validate (all languages)
+        run: bash .github/smoke-test/validate.sh "${{ steps.extract.outputs.snippet-file }}" all
+
+  typescript-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: extract
+        name: Run published snippet-extractor action (TypeScript only)
+        uses: matrica-code/snippet-viewer/extractor@main
+        with:
+          paths: .github/smoke-test/fixtures/typescript
+          snippet-file: smoke-test-snippets-ts.json
+          reset: "true"
+          image-tag: ${{ inputs.image-tag }}
+          upload-artifact: "true"
+          artifact-name: smoke-test-snippets-typescript
+          artifact-retention-days: "7"
+
+      - name: Show generated snippets
+        run: |
+          echo "::group::smoke-test-snippets-ts.json"
+          cat smoke-test-snippets-ts.json
+          echo "::endgroup::"
+
+      - name: Validate (TypeScript)
+        run: bash .github/smoke-test/validate.sh "${{ steps.extract.outputs.snippet-file }}" ts
+
+  java-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: extract
+        name: Run published snippet-extractor action (Java only)
+        uses: matrica-code/snippet-viewer/extractor@main
+        with:
+          paths: .github/smoke-test/fixtures/java
+          snippet-file: smoke-test-snippets-java.json
+          reset: "true"
+          image-tag: ${{ inputs.image-tag }}
+          upload-artifact: "true"
+          artifact-name: smoke-test-snippets-java
+          artifact-retention-days: "7"
+
+      - name: Show generated snippets
+        run: |
+          echo "::group::smoke-test-snippets-java.json"
+          cat smoke-test-snippets-java.json
+          echo "::endgroup::"
+
+      - name: Validate (Java)
+        run: bash .github/smoke-test/validate.sh "${{ steps.extract.outputs.snippet-file }}" java

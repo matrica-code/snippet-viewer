@@ -156,21 +156,27 @@ node extractSnippets.mjs --reset --snippetFile=../example/snippets.json [<dir|fi
 
 ## Publishing
 
-Both artifacts publish from a single version tag. Bump `version` in
-`extractor/package.json`, then:
+**The tag is the source of truth for the version** — to release, just push a tag.
+Both workflows derive the version from it, so there is no `package.json` bump to
+keep in sync.
 
 ```bash
-git tag extractor-v1.0.0
-git push origin extractor-v1.0.0
+git tag extractor-v1.0.3
+git push origin extractor-v1.0.3
 ```
 
 That fires two workflows:
 
-- `.github/workflows/extractor-npm.yml` → publishes `@matrica-code/snippet-extractor`
-  to npm (needs an `NPM_TOKEN` repo secret).
+- `.github/workflows/extractor-npm.yml` → sets the package version to the tag's
+  version and publishes `@matrica-code/snippet-extractor` to npm (needs an
+  `NPM_TOKEN` repo secret).
 - `.github/workflows/extractor-image.yml` → builds the multi-arch image and pushes
-  `ghcr.io/matrica-code/snippet-extractor:1.0.0` + `:latest` (uses the built-in
+  `ghcr.io/matrica-code/snippet-extractor:1.0.3` + `:latest` (uses the built-in
   `GITHUB_TOKEN`).
+
+The `version` in `extractor/package.json` is only a default for manual
+`workflow_dispatch` runs; tagged releases override it. npm refuses to republish a
+version that already exists, so each release tag must use a new version number.
 
 ## CLI
 

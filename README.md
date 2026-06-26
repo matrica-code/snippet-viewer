@@ -11,9 +11,10 @@ This repo is two halves of one pipeline:
 
 - Syntax highlighting via Prism.js (loaded automatically from CDN)
 - Auto-detects language from file extension
-- Shared cache across all instances (single fetch for multiple snippets)
+- Shared cache across all instances (single fetch per source)
 - Shadow DOM isolation (safe for WordPress, no style conflicts)
 - Provider component for sharing config across multiple viewers
+- Named sources for pulling from multiple snippet files via one central manifest
 - Supports TypeScript, JavaScript, JSX, TSX, Java, Python, Bash, JSON, YAML, and more
 
 ## Installation
@@ -87,6 +88,65 @@ Then in any post/page, just use:
 <snippet-viewer snippet="my-function@example.ts"></snippet-viewer>
 ```
 
+### 5. Multiple snippet files with Named Sources
+
+When your snippets live in **more than one file** (e.g. one per language, product, or
+repo), give each file a name and let viewers reference it with a `source` attribute.
+The `snippet-host` path always resolves to a single `snippets.json`; named sources let
+one page mix several files and keep the URL mapping in one place.
+
+**Option A: Manifest (recommended)** — register a manifest once in your theme header:
+
+```html
+<meta name="snippet-sources" content="https://your-cdn.com/sources.json" />
+```
+
+where `sources.json` maps names to full URLs:
+
+```json
+{
+  "java": "https://your-cdn.com/java-snippets.json",
+  "frontend": "https://your-cdn.com/frontend-snippets.json"
+}
+```
+
+**Option B: JavaScript API** — register names in your theme header:
+
+```html
+<script>
+  SnippetViewer.setSources({
+    java: "https://your-cdn.com/java-snippets.json",
+    frontend: "https://your-cdn.com/frontend-snippets.json",
+  });
+</script>
+```
+
+Then reference a `source` per viewer — or set a default on a provider and override it
+on individual viewers:
+
+```html
+<snippet-viewer source="java" snippet="widget-service@WidgetService.java"></snippet-viewer>
+
+<snippet-provider source="frontend">
+  <!-- inherit the provider's "frontend" source -->
+  <snippet-viewer snippet="counter@Counter.tsx"></snippet-viewer>
+  <!-- a single viewer can opt into a different source -->
+  <snippet-viewer source="java" snippet="describe@WidgetMembers.java"></snippet-viewer>
+</snippet-provider>
+```
+
+Resolution rules:
+
+- A `source` name wins over `snippet-host`; without a `source`, the legacy
+  `{snippet-host}/snippets.json` path is used, so existing pages keep working.
+- A viewer's own `source` / `snippet-host` wins over a provider's, so a subtree can
+  default to one file and opt individual viewers into another.
+- The manifest is fetched once and each source is cached by URL, so a given file is
+  only downloaded once no matter how many viewers reference it.
+
+A full working example (manifest + two extra source files) lives in
+[`example/`](example/index.html).
+
 ## Snippet Key Format
 
 Keys follow the pattern: `name@filename.ext`
@@ -104,16 +164,27 @@ Examples:
 
 ### `<snippet-viewer>`
 
-| Attribute      | Description                               |
-| -------------- | ----------------------------------------- |
-| `snippet`      | Key to look up in the JSON file           |
-| `snippet-host` | Base URL where `snippets.json` is located |
+| Attribute      | Description                                                            |
+| -------------- | --------------------------------------------------------------------- |
+| `snippet`      | Key to look up in the JSON file                                       |
+| `snippet-host` | Base URL where `snippets.json` is located                            |
+| `source`       | Named source to fetch from (see [Named Sources](#5-multiple-snippet-files-with-named-sources)); takes precedence over `snippet-host` |
 
 ### `<snippet-provider>`
 
-| Attribute      | Description                                               |
-| -------------- | --------------------------------------------------------- |
-| `snippet-host` | Shared base URL for all child `<snippet-viewer>` elements |
+| Attribute      | Description                                                               |
+| -------------- | ------------------------------------------------------------------------ |
+| `snippet-host` | Shared base URL for all child `<snippet-viewer>` elements                |
+| `source`       | Shared named source for all child `<snippet-viewer>` elements            |
+
+### JavaScript API
+
+| Method                          | Description                                          |
+| ------------------------------- | ---------------------------------------------------- |
+| `SnippetViewer.setDefaultHost(url)` | Global default host for viewers without one      |
+| `SnippetViewer.setSource(name, url)` | Register a single named source                  |
+| `SnippetViewer.setSources(map)` | Register named sources from a `{ name: url }` object |
+| `SnippetViewer.setTheme(name)`  | Prism theme (`tomorrow`, `okaidia`, `twilight`, …)   |
 
 ## Supported Languages
 

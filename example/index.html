@@ -3,6 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Named-source manifest: maps source names -> snippets.json URLs.
+         Update this one file and every page that references a source follows. -->
+    <meta name="snippet-sources" content="./sources.json" />
     <script src="/snippet-viewer.js"></script>
     <script>
       // Set default host and theme before body is parsed (so snippet-viewers see it when they connect)
@@ -81,7 +84,58 @@
       </snippet-provider>
     </div>
 
-    <!-- Section 3: Mixed sources -->
+    <!-- Section 3: Named sources (multiple files) -->
+    <div class="section">
+      <h2>Named Sources (multiple snippet files)</h2>
+      <p>
+        With a manifest registered via
+        <code>&lt;meta name="snippet-sources" content="./sources.json"&gt;</code>,
+        each viewer can pull from a different file by naming a
+        <code>source</code>. The manifest here maps
+        <code>frontend</code> &rarr; <code>frontend-snippets.json</code> and
+        <code>java</code> &rarr; <code>java-snippets.json</code> &mdash; both
+        produced by the snippet-extractor from the smoke-test fixtures.
+      </p>
+
+      <p>A TypeScript class from the <code>frontend</code> source:</p>
+      <snippet-viewer
+        source="frontend"
+        snippet="ts-class@FuturesModel.ts"
+      ></snippet-viewer>
+
+      <p>A Java class from the <code>java</code> source:</p>
+      <snippet-viewer
+        source="java"
+        snippet="java-class@WidgetService.java"
+      ></snippet-viewer>
+    </div>
+
+    <!-- Section 4: Provider with a named source + per-viewer override -->
+    <div class="section">
+      <h2>Provider Source + Per-Viewer Override</h2>
+      <p>
+        A provider can set a default <code>source</code> for everything inside
+        it (fetched once, shared). Any single viewer can still opt into a
+        different source &mdash; the last one below overrides
+        <code>frontend</code> with <code>java</code>:
+      </p>
+
+      <snippet-provider source="frontend">
+        <p>Inherits the provider's <code>frontend</code> source:</p>
+        <snippet-viewer snippet="react-component@Counter.tsx"></snippet-viewer>
+
+        <p>Also <code>frontend</code> (a decorated method):</p>
+        <snippet-viewer snippet="ts-method@FuturesModel.ts"></snippet-viewer>
+
+        <p>Overrides to the <code>java</code> source:</p>
+        <snippet-viewer
+          source="java"
+          snippet="java-method@WidgetMembers.java"
+        ></snippet-viewer>
+      </snippet-provider>
+    </div>
+
+    <!-- Section 5: Mixed sources -->
     <div class="section">
       <h2>Override Default Host</h2>
       <p>

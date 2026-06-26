@@ -1,0 +1,5 @@
+{
+  "default": "./snippets.json",
+  "java": "./java-snippets.json",
+  "frontend": "./frontend-snippets.json"
+}

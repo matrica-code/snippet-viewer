@@ -9,10 +9,21 @@
  *     snippet-host="https://example.com/snippets">
  *   </snippet-viewer>
  *
- * Usage (with provider - recommended for multiple snippets):
+ * Usage (with provider - recommended for multiple snippets from one source):
  *   <snippet-provider snippet-host="https://example.com/snippets">
  *     <snippet-viewer snippet="counter-model@counter-model.ts"></snippet-viewer>
  *     <snippet-viewer snippet="future-model@futures-model.ts"></snippet-viewer>
+ *   </snippet-provider>
+ *
+ * Usage (named sources - for MULTIPLE snippet files):
+ *   Register names -> URLs once (see WordPress Option 3 below), then reference a
+ *   `source` per viewer or per provider. A viewer's own source/host wins over a
+ *   provider's, so a subtree can default to one file and opt a viewer into another:
+ *
+ *   <snippet-viewer source="java" snippet="java-class@WidgetService.java"></snippet-viewer>
+ *   <snippet-provider source="react">
+ *     <snippet-viewer snippet="react-component@Counter.tsx"></snippet-viewer>
+ *     <snippet-viewer source="java" snippet="java-method@WidgetMembers.java"></snippet-viewer>
  *   </snippet-provider>
  *
  * WordPress usage (Option 1 - meta tag, add to theme header):
@@ -29,11 +40,27 @@
  *
  * Available themes: 'tomorrow' (default), 'okaidia', 'twilight', 'coy', 'solarizedlight', 'dark'
  *
+ * WordPress usage (Option 3 - named sources for MULTIPLE files):
+ *   A. Manifest (recommended - update one JSON, every post follows):
+ *      <meta name="snippet-sources" content="https://your-cdn.com/sources.json">
+ *      where sources.json is:
+ *        { "java": "https://.../java.json", "react": "https://.../react.json" }
+ *   B. Or register in JS (theme header):
+ *      <script>
+ *        SnippetViewer.setSources({
+ *          java: 'https://your-cdn.com/java.json',
+ *          react: 'https://your-cdn.com/react.json',
+ *        });
+ *      </script>
+ *   Then in posts: <snippet-viewer source="java" snippet="java-class@WidgetService.java">
+ *
  * Then in any post/page, just use:
  *   <snippet-viewer snippet="my-code@example.ts"></snippet-viewer>
  *
- * The component will fetch {snippetHost}/snippets.json and look up the snippet by key.
- * When using the provider, the JSON is fetched once and shared across all children.
+ * Resolution: a `source` name maps to a full snippets.json URL via the registry;
+ * otherwise the component fetches {snippetHost}/snippets.json (legacy default).
+ * The JSON is cached per-URL, so a provider (or repeated viewers) fetch each
+ * source only once.
  */
 (function (global) {
   "use strict";
@@ -102,6 +129,116 @@
       }
     }
     return config.theme || DEFAULT_THEME;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Named snippet sources
+  //
+  // A viewer/provider can name a `source` instead of a `snippet-host`. Names map
+  // to full snippets.json URLs via this registry, populated either:
+  //   * programmatically — SnippetViewer.setSource('java', 'https://.../java.json')
+  //                        SnippetViewer.setSources({ java: '...', react: '...' })
+  //   * via a manifest    — <meta name="snippet-sources" content="https://.../sources.json">
+  //                        where sources.json is { "java": "...", "react": "..." }
+  //
+  // The legacy `snippet-host` path (-> `{host}/snippets.json`) is unchanged and
+  // used whenever no `source` is given, so existing pages keep working.
+  // ---------------------------------------------------------------------------
+  const sources = new Map(); // name -> snippets.json URL
+  let sourcesManifestPromise = null;
+
+  /**
+   * Register a single named source. Wins over anything in the manifest with the
+   * same name (programmatic config is treated as authoritative).
+   */
+  function setSource(name, url) {
+    sources.set(name, url);
+  }
+
+  /** Register several named sources at once: setSources({ java: '...', react: '...' }). */
+  function setSources(map) {
+    Object.entries(map || {}).forEach(([name, url]) => sources.set(name, url));
+  }
+
+  /**
+   * Lazily fetch the `<meta name="snippet-sources">` manifest (once) and merge
+   * it into the registry. Programmatically-set names are never clobbered.
+   * Always resolves (a failed manifest is logged, not thrown) so a bad manifest
+   * doesn't wedge every viewer.
+   */
+  function ensureSourcesLoaded() {
+    if (sourcesManifestPromise) return sourcesManifestPromise;
+
+    const meta = document.querySelector('meta[name="snippet-sources"]');
+    const manifestUrl = meta && meta.getAttribute("content");
+    if (!manifestUrl) {
+      sourcesManifestPromise = Promise.resolve();
+      return sourcesManifestPromise;
+    }
+
+    sourcesManifestPromise = (async () => {
+      try {
+        const response = await fetch(manifestUrl);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        const map = await response.json();
+        Object.entries(map).forEach(([name, url]) => {
+          if (!sources.has(name)) sources.set(name, url);
+        });
+      } catch (err) {
+        console.error(`snippet-viewer: failed to load sources manifest: ${err.message}`);
+      }
+    })();
+    return sourcesManifestPromise;
+  }
+
+  /**
+   * Resolve the snippets.json URL for a viewer/provider. A `source` name takes
+   * precedence; otherwise fall back to the legacy `{host}/snippets.json`.
+   * Returns null when nothing is configured (caller renders an error).
+   */
+  async function resolveSnippetUrl({ source, host }) {
+    if (source) {
+      await ensureSourcesLoaded();
+      const url = sources.get(source);
+      if (!url) {
+        throw new Error(`Unknown snippet source "${source}"`);
+      }
+      return url;
+    }
+    const resolvedHost = host || getDefaultHost();
+    if (!resolvedHost) return null;
+    return `${resolvedHost.replace(/\/$/, "")}/snippets.json`;
+  }
+
+  /**
+   * Fetch (and cache) a snippets.json by its fully-resolved URL. Shared by the
+   * viewer and the provider; the cache and in-flight dedup are keyed by URL, so
+   * different sources coexist and the same source is only fetched once.
+   */
+  function fetchSnippetsByUrl(url) {
+    if (snippetCache.has(url)) return Promise.resolve(snippetCache.get(url));
+    if (pendingRequests.has(url)) return pendingRequests.get(url);
+
+    const fetchPromise = (async () => {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        const data = await response.json();
+        snippetCache.set(url, data);
+        return data;
+      } finally {
+        // Clear the in-flight marker on success *and* failure, so a transient
+        // error doesn't leave a permanently-rejected promise cached for retries.
+        pendingRequests.delete(url);
+      }
+    })();
+
+    pendingRequests.set(url, fetchPromise);
+    return fetchPromise;
   }
 
   // Prism.js CDN URLs
@@ -198,7 +335,7 @@
 
   class SnippetViewer extends HTMLElement {
     static get observedAttributes() {
-      return ["snippet", "snippet-host"];
+      return ["snippet", "snippet-host", "source"];
     }
 
     constructor() {
@@ -229,23 +366,35 @@
       return this.getAttribute("snippet-host") || getDefaultHost() || "";
     }
 
+    get source() {
+      return this.getAttribute("source") || "";
+    }
+
     async loadSnippet() {
       // Ensure shadow DOM is ready
       if (!this._rendered) {
         return;
       }
 
-      const { snippet, snippetHost } = this;
+      const { snippet, source, snippetHost } = this;
 
-      if (!snippet || !snippetHost) {
-        this.renderError("Missing snippet or snippet-host attribute");
+      // A viewer is configured if it has a snippet and either a named source or
+      // a host (its own, a provider-supplied one, or the global default).
+      if (!snippet || (!source && !snippetHost)) {
+        this.renderError("Missing snippet, plus a source or snippet-host");
         return;
       }
 
       try {
         this.renderLoading();
 
-        const snippetData = await this.fetchSnippets(snippetHost);
+        const url = await resolveSnippetUrl({ source, host: snippetHost });
+        if (!url) {
+          this.renderError("Could not resolve a snippets URL");
+          return;
+        }
+
+        const snippetData = await fetchSnippetsByUrl(url);
         const code = snippetData[snippet];
 
         if (code === undefined) {
@@ -258,37 +407,6 @@
       } catch (error) {
         this.renderError(`Failed to load snippet: ${error.message}`);
       }
-    }
-
-    async fetchSnippets(host) {
-      const url = `${host.replace(/\/$/, "")}/snippets.json`;
-
-      // Return from shared cache if available
-      if (snippetCache.has(url)) {
-        return snippetCache.get(url);
-      }
-
-      // If a request is already in-flight, wait for it
-      if (pendingRequests.has(url)) {
-        return pendingRequests.get(url);
-      }
-
-      // Create the fetch promise and track it
-      const fetchPromise = (async () => {
-        const response = await fetch(url);
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        snippetCache.set(url, data);
-        pendingRequests.delete(url);
-        return data;
-      })();
-
-      pendingRequests.set(url, fetchPromise);
-      return fetchPromise;
     }
 
     async copyToClipboard() {
@@ -515,7 +633,7 @@
    */
   class SnippetProvider extends HTMLElement {
     static get observedAttributes() {
-      return ["snippet-host"];
+      return ["snippet-host", "source"];
     }
 
     constructor() {
@@ -527,6 +645,10 @@
 
     get snippetHost() {
       return this.getAttribute("snippet-host") || "";
+    }
+
+    get source() {
+      return this.getAttribute("source") || "";
     }
 
     get snippets() {
@@ -546,16 +668,16 @@
     }
 
     attributeChangedCallback(name, oldValue, newValue) {
-      if (oldValue !== newValue && name === "snippet-host") {
+      if (oldValue !== newValue && (name === "snippet-host" || name === "source")) {
         this.prefetch();
       }
     }
 
     async prefetch() {
-      const host = this.snippetHost;
+      const { source, snippetHost: host } = this;
 
-      if (!host) {
-        this._error = "Missing snippet-host attribute on provider";
+      if (!source && !host) {
+        this._error = "Missing source or snippet-host attribute on provider";
         this._loading = false;
         return;
       }
@@ -564,36 +686,13 @@
         this._loading = true;
         this._error = null;
 
-        const url = `${host.replace(/\/$/, "")}/snippets.json`;
-
-        // Use shared cache
-        if (snippetCache.has(url)) {
-          this._snippets = snippetCache.get(url);
-          this._loading = false;
-          this.notifyChildren();
-          return;
+        const url = await resolveSnippetUrl({ source, host });
+        if (!url) {
+          throw new Error("Could not resolve a snippets URL");
         }
 
-        // Wait for pending request or fetch
-        if (pendingRequests.has(url)) {
-          this._snippets = await pendingRequests.get(url);
-        } else {
-          const fetchPromise = (async () => {
-            const response = await fetch(url);
-            if (!response.ok) {
-              throw new Error(
-                `HTTP ${response.status}: ${response.statusText}`
-              );
-            }
-            const data = await response.json();
-            snippetCache.set(url, data);
-            pendingRequests.delete(url);
-            return data;
-          })();
-
-          pendingRequests.set(url, fetchPromise);
-          this._snippets = await fetchPromise;
-        }
+        // Shared, URL-keyed cache + in-flight dedup (same as the viewer).
+        this._snippets = await fetchSnippetsByUrl(url);
 
         this._loading = false;
         this.notifyChildren();
@@ -613,10 +712,17 @@
         })
       );
 
-      // Also trigger re-render on child snippet-viewers
+      // Push this provider's source/host down to child viewers that don't carry
+      // their own. A viewer with an explicit source or snippet-host is left
+      // alone, so a single viewer can opt into a different source mid-subtree.
       const viewers = this.querySelectorAll("snippet-viewer");
       viewers.forEach((viewer) => {
-        if (!viewer.hasAttribute("snippet-host")) {
+        if (viewer.hasAttribute("source") || viewer.hasAttribute("snippet-host")) {
+          return;
+        }
+        if (this.source) {
+          viewer.setAttribute("source", this.source);
+        } else {
           viewer.setAttribute("snippet-host", this.snippetHost);
         }
       });
@@ -631,6 +737,8 @@
   global.SnippetViewer = SnippetViewer;
   global.SnippetViewer.setDefaultHost = setDefaultHost;
   global.SnippetViewer.setTheme = setTheme;
+  global.SnippetViewer.setSource = setSource;
+  global.SnippetViewer.setSources = setSources;
   global.SnippetProvider = SnippetProvider;
   global.snippetCache = snippetCache;
 })(typeof window !== "undefined" ? window : this);

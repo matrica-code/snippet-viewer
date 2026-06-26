@@ -1,0 +1,5 @@
+{
+  "java-property@WidgetMembers.java": "@Autowired\nprivate WidgetRepository repository;",
+  "java-method@WidgetMembers.java": "@GetMapping(\"/widget\")\npublic String describe() {\n    return repository.findLabel();\n}",
+  "java-class@WidgetService.java": "@Service\npublic class WidgetService {\n\n    private String label = \"untitled\";\n\n    // A secret the rendered docs must never show — proves `ignore` strips it.\n\n    public String render() {\n        return \"<div>\" + label + \"</div>\";\n    }\n}"
+}

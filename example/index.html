@@ -41,6 +41,17 @@
         background: #f9f9f9;
         border-radius: 8px;
       }
+      .theme-bar {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 1.5rem 0;
+      }
+      .theme-bar select {
+        padding: 0.4rem 0.6rem;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
     </style>
   </head>
   <body>
@@ -48,6 +59,21 @@
     <p>
       This demonstrates the <code>&lt;snippet-viewer&gt;</code> web component.
     </p>
+
+    <!-- Theme switcher: sets the `theme` attribute on every viewer at runtime.
+         A bare name resolves to a Prism CDN theme; a URL loads a custom one. -->
+    <div class="theme-bar">
+      <label for="theme-select">Theme:</label>
+      <select id="theme-select" onchange="changeTheme(this.value)">
+        <option value="tomorrow">Tomorrow</option>
+        <option value="okaidia" selected>Okaidia</option>
+        <option value="twilight">Twilight</option>
+        <option value="coy">Coy</option>
+        <option value="solarizedlight">Solarized Light</option>
+        <option value="dark">Dark</option>
+        <option value="kondra-code">Kondra (custom, via URL)</option>
+      </select>
+    </div>
 
     <!-- Section 1: Using default host (simplest) -->
     <div class="section">
@@ -154,6 +180,19 @@
       document
         .getElementById("local-provider")
         .setAttribute("snippet-host", new URL("./", window.location.href).href);
+
+      // Switch every viewer's theme at runtime by setting the `theme` attribute.
+      // Built-in themes are passed by name; the custom one is passed as a URL
+      // (resolved against this page), which the component loads as-is.
+      function changeTheme(value) {
+        const theme =
+          value === "kondra-code"
+            ? new URL("./theme/prism-kondra-code.css", window.location.href).href
+            : value;
+        document
+          .querySelectorAll("snippet-viewer")
+          .forEach((viewer) => viewer.setAttribute("theme", theme));
+      }
     </script>
   </body>
 </html>

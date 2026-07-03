@@ -105,16 +105,20 @@
   }
 
   /**
-   * Set global Prism.js theme for syntax highlighting.
-   * Must be called BEFORE any snippet-viewer elements are rendered.
+   * Set the global Prism.js theme for syntax highlighting. The value is either a
+   * built-in Prism theme name (resolved against the CDN) or a full stylesheet
+   * URL for a custom theme. Mirrors setDefaultHost: set it once in your header,
+   * or via <meta name="snippet-theme">. An individual <snippet-viewer theme="...">
+   * attribute overrides it.
    *
    * Usage:
-   *   SnippetViewer.setTheme('okaidia');
+   *   SnippetViewer.setTheme('okaidia');                          // built-in name
+   *   SnippetViewer.setTheme('https://cdn.example.com/my.css');   // custom URL
    *
    * Or via meta tag (parsed automatically):
    *   <meta name="snippet-theme" content="okaidia">
    *
-   * Available themes: 'tomorrow', 'okaidia', 'twilight', 'coy', 'solarizedlight', 'dark'
+   * Built-in names: 'tomorrow', 'okaidia', 'twilight', 'coy', 'solarizedlight', 'dark'
    */
   function setTheme(theme) {
     config.theme = theme;
@@ -335,7 +339,7 @@
 
   class SnippetViewer extends HTMLElement {
     static get observedAttributes() {
-      return ["snippet", "snippet-host", "source"];
+      return ["snippet", "snippet-host", "source", "theme"];
     }
 
     constructor() {
@@ -351,9 +355,20 @@
       this.loadSnippet();
     }
 
-    attributeChangedCallback(_name, oldValue, newValue) {
+    attributeChangedCallback(name, oldValue, newValue) {
       // Only react to changes after initial render
-      if (this._rendered && oldValue !== newValue) {
+      if (!this._rendered || oldValue === newValue) return;
+
+      if (name === "theme") {
+        // A theme change only swaps the stylesheet link — re-render the shadow
+        // DOM and re-highlight the current code, no re-fetch needed.
+        this.render();
+        if (this._currentCode) {
+          this.renderCode(this._currentCode);
+        } else {
+          this.loadSnippet();
+        }
+      } else {
         this.loadSnippet();
       }
     }
@@ -368,6 +383,11 @@
 
     get source() {
       return this.getAttribute("source") || "";
+    }
+
+    // Per-element theme wins; falls back to the global/meta-tag theme.
+    get theme() {
+      return this.getAttribute("theme") || getTheme();
     }
 
     async loadSnippet() {
@@ -435,9 +455,18 @@
     }
 
     render() {
-      const theme = getTheme();
+      const theme = this.theme;
+
+      // A theme value is either a bare Prism theme name (resolved against the
+      // CDN) or a full/root-relative stylesheet URL for a custom theme. One
+      // field, like snippet-host — no separate registry or theme-url attribute.
+      const themeUrl =
+        /^(https?:)?\/\//.test(theme) || theme.startsWith("/")
+          ? theme
+          : `${PRISM_CDN}/themes/prism-${theme}.min.css`;
+
       this.shadowRoot.innerHTML = `
-        <link rel="stylesheet" href="${PRISM_CDN}/themes/prism-${theme}.min.css">
+        <link rel="stylesheet" href="${themeUrl}">
         <link rel="stylesheet" href="${PRISM_CDN}/plugins/line-numbers/prism-line-numbers.min.css">
         <style>
           :host {

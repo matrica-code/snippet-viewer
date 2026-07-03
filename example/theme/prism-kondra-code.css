@@ -1,0 +1,95 @@
+/**
+ * Custom Prism.js theme — "kondra-code"
+ * One-Light-inspired palette: white background, all the token keywords has same color.
+ *
+ * Host this file publicly and register it by name:
+ *   <script>
+ *     SnippetViewer.registerTheme('kondra-code', 'https://your-cdn.com/prism-kondra-code.css');
+ *   </script>
+ *
+ * Then use it anywhere with just the short name:
+ *   <snippet-viewer theme="kondra-code" ...></snippet-viewer>
+ */
+
+code[class*="language-"],
+pre[class*="language-"] {
+  color: #444444;
+  font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
+  font-size: 14px;
+  text-align: left;
+  white-space: pre;
+  word-spacing: normal;
+  word-break: normal;
+  word-wrap: normal;
+  line-height: 1.6;
+  tab-size: 2;
+  hyphens: none;
+  margin-right: 1px;
+}
+
+
+:not(pre) > code[class*="language-"] {
+  border-radius: 0.3em;
+  background: #f3f4f6;
+}
+
+/* Line numbers plugin gutter */
+pre[class*="language-"].line-numbers {
+  position: relative;
+  padding-left: 3.8em;
+  counter-reset: linenumber;
+}
+
+pre[class*="language-"].line-numbers > code {
+  position: relative;
+  white-space: inherit;
+}
+
+.line-numbers .line-numbers-rows {
+  position: absolute;
+  pointer-events: none;
+  top: 0;
+  bottom: 0;
+  font-size: 100%;
+  left: -3.8em;
+  width: 3.8em;
+  letter-spacing: -1px;
+  background: #f3f4f6 !important;
+  border-right: 1px solid #e1e4e8 !important;
+  user-select: none;
+}
+
+.line-numbers-rows > span {
+  display: block;
+  counter-increment: linenumber;
+}
+
+.line-numbers-rows > span:before {
+  content: counter(linenumber);
+  color: #a0a1a7;
+  display: block;
+  padding-right: 0.8em;
+  text-align: right;
+}
+
+/* Token colors - One Light palette */
+.token.comment,
+.token.block-comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: #a0a1a7;
+  font-style: italic;
+}
+
+.token.punctuation {
+  color: #383a42;
+}
+
+.token.property,
+.token.tag,
+.token.constant,
+.token.symbol,
+.token.deleted {
+  color: #383a42;
+}

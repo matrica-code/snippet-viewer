@@ -2,13 +2,16 @@
  * Custom Prism.js theme — "kondra-code"
  * One-Light-inspired palette: white background, all the token keywords has same color.
  *
- * Host this file publicly and register it by name:
+ * Set it globally via a meta tag (e.g. in your WordPress theme header):
+ *   <meta name="snippet-theme" content="https://your-cdn.com/prism-kondra-code.css">
+ *
+ * Or globally via JavaScript, before the page's snippet-viewers connect:
  *   <script>
- *     SnippetViewer.registerTheme('kondra-code', 'https://your-cdn.com/prism-kondra-code.css');
+ *     SnippetViewer.setTheme('https://your-cdn.com/prism-kondra-code.css');
  *   </script>
  *
- * Then use it anywhere with just the short name:
- *   <snippet-viewer theme="kondra-code" ...></snippet-viewer>
+ * Or per-viewer, to override the global/meta-tag theme for just one instance:
+ *   <snippet-viewer theme="https://your-cdn.com/prism-kondra-code.css" ...></snippet-viewer>
  */
 
 code[class*="language-"],

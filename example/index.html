@@ -161,7 +161,73 @@
       </snippet-provider>
     </div>
 
-    <!-- Section 5: Mixed sources -->
+    <!-- Section 5: Extractor marker features -->
+    <div class="section">
+      <h2>Extractor Marker Features</h2>
+      <p>
+        These snippets are produced by the
+        <a href="https://github.com/matrica-code/snippet-viewer/tree/main/extractor"
+          >snippet-extractor</a
+        >
+        from a single annotated
+        <code>Example.java</code>, showing two marker capabilities.
+      </p>
+
+      <h3>Reusing one class across snippets</h3>
+      <p>
+        Two markers back the same class; a scoped
+        <code>// extract-code ignore overview</code> hides one method from the
+        <code>overview</code> snippet while <code>detail</code> keeps it — no
+        need to duplicate the class:
+      </p>
+      <pre style="background:#1d1f21;color:#c5c8c6;padding:1rem;border-radius:6px;overflow-x:auto"><code>// extract-code overview
+// extract-code detail
+public class ExampleClass {
+    public void basic(Map&lt;String, String&gt; store) {
+        store.put("greeting", "hello");
+    }
+
+    // extract-code ignore overview
+    public void advanced(Map&lt;String, Integer&gt; store) {
+        store.merge("visits", 1, Integer::sum);
+    }
+}</code></pre>
+
+      <p><code>overview</code> — <code>advanced()</code> stripped out:</p>
+      <snippet-viewer
+        source="features"
+        snippet="overview@Example.java"
+      ></snippet-viewer>
+
+      <p><code>detail</code> — same class, <code>advanced()</code> kept:</p>
+      <snippet-viewer
+        source="features"
+        snippet="detail@Example.java"
+      ></snippet-viewer>
+
+      <h3>Grouping loose statements with a terminator</h3>
+      <p>
+        A run of sibling statements the AST wouldn't bundle on its own is
+        grouped by closing the marker with
+        <code>// extract-code end &lt;name&gt;</code>. The trailing
+        <code>service.flush()</code> falls outside the terminator and is
+        excluded:
+      </p>
+      <pre style="background:#1d1f21;color:#c5c8c6;padding:1rem;border-radius:6px;overflow-x:auto"><code>// extract-code data-storage
+service.set("org.group", "key", "value");
+String val = service.get("org.group", "key");
+// extract-code end data-storage
+
+service.flush();</code></pre>
+
+      <p>Captured snippet:</p>
+      <snippet-viewer
+        source="features"
+        snippet="data-storage@Example.java"
+      ></snippet-viewer>
+    </div>
+
+    <!-- Section 6: Mixed sources -->
     <div class="section">
       <h2>Override Default Host</h2>
       <p>

@@ -30,7 +30,8 @@
     "README.md"
   ],
   "scripts": {
-    "extract": "node extractSnippets.mjs"
+    "extract": "node extractSnippets.mjs",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18"

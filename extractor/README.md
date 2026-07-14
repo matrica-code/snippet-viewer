@@ -10,11 +10,58 @@ Parses with [Tree-sitter](https://tree-sitter.github.io/), so it works across
 ## Markers
 
 ```ts
-// extract-code <name>     // export the node that follows, keyed as <name>@<file>
-// extract-code ignore     // strip the following node from any snippet it lives in
+// extract-code <name>       // export the node that follows, keyed as <name>@<file>
+// extract-code end <name>   // (optional) explicitly end snippet <name> here
+// extract-code ignore       // strip the following node from every snippet it lives in
+// extract-code ignore a, b  // strip it only from snippets a and b
 ```
 
 If the marked node is an `import`, the **whole file** is emitted.
+
+### Extent of a snippet
+
+By default a marker captures the **whole syntax node** that follows it — a
+class (with its decorators/annotations), a method, a field, a statement. When
+several markers stack on the annotations of one declaration, each captures its
+own piece, and a marker on the declaration itself captures the declaration:
+
+```java
+// extract-code policy      // -> just this annotation
+@ListenerPolicy(Policy.NO_CALLBACK)
+
+// extract-code service      // -> the whole class below
+public class AutosaveService { /* ... */ }
+```
+
+To group a **run of loose statements** the AST wouldn't bundle on its own, close
+it with a terminator. Everything from the marker up to `extract-code end <name>`
+is captured; without a terminator the whole-node default applies:
+
+```java
+// extract-code data-storage
+service.set("org.group", "key", "value");
+String val = service.get("org.group", "key");
+// extract-code end data-storage
+```
+
+### Reusing one class across several snippets
+
+`ignore` scoping lets one source class back several snippets that each expose a
+different part — no need to duplicate the class:
+
+```java
+// extract-code overview
+// extract-code detail
+public class ExampleClass {
+    public void basic() { /* shown in both */ }
+
+    // extract-code ignore overview   // hidden from `overview`, kept in `detail`
+    public void advanced() { /* ... */ }
+}
+```
+
+An `ignore` with no names strips from **every** enclosing snippet (the original
+behavior). Marker directives themselves never appear in rendered output.
 
 ## Ways to run it
 
@@ -148,11 +195,31 @@ If the CLI isn't on `PATH`, the macOS installer puts it at `/opt/podman/bin/podm
 ### Locally from source (Node)
 
 ```bash
-cd extractor && npm install
+cd extractor && npm install --legacy-peer-deps   # see the Testing note on this flag
 node extractSnippets.mjs --reset --snippetFile=../example/snippets.json [<dir|file> ...]
 ```
 
 `--reset` starts from `{}`; omit it to merge into an existing file.
+
+## Testing
+
+```bash
+cd extractor && npm install --legacy-peer-deps   # once, to pull the Tree-sitter grammars
+npm test                                          # runs extractSnippets.test.mjs via `node --test`
+```
+
+> The `--legacy-peer-deps` flag is currently required: `tree-sitter-java`
+> declares a peer range that predates the pinned `tree-sitter` version, so a
+> plain `npm install` fails with `ERESOLVE`. It's a benign resolution mismatch —
+> the grammars build and run fine.
+
+`extractSnippets.test.mjs` drives `extractFromSource` directly — each case is a
+small source string paired with its expected snippet — and covers every marker
+use case across JS/TS/TSX and Java (whole-file mode, `ignore` scoping,
+terminators, decorator/annotation handling) plus regressions for the
+annotation/`modifiers` extraction bug. It also re-extracts the committed
+`.github/smoke-test` fixtures so they stay in sync with the extractor. Add a
+test alongside any new marker behavior or language grammar.
 
 ## Publishing
 

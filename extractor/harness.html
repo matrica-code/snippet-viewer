@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>snippet extractor — test harness</title>
+<style>
+  :root {
+    --border: #d7dae0;
+    --muted: #6b7280;
+    --accent: #2563eb;
+    --bg: #f7f8fa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: #1f2328;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  header input[type="text"] {
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 13px;
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    width: 240px;
+  }
+  #status { font-size: 13px; color: var(--muted); }
+  #status.error { color: #b91c1c; }
+  header .spacer { flex: 1; }
+  header a { font-size: 13px; color: var(--accent); text-decoration: none; }
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(360px, 45%) 1fr;
+    min-height: 0;
+  }
+  #editor-pane {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    min-height: 0;
+  }
+  textarea {
+    flex: 1;
+    width: 100%;
+    border: 0;
+    resize: none;
+    padding: 14px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    line-height: 1.5;
+    outline: none;
+    white-space: pre;
+    background: #fff;
+  }
+  #legend {
+    font-size: 12px;
+    color: var(--muted);
+    padding: 8px 14px;
+    border-top: 1px solid var(--border);
+    background: #fff;
+    line-height: 1.7;
+  }
+  #legend code {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0 4px;
+  }
+  #results {
+    overflow-y: auto;
+    padding: 16px;
+  }
+  .card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .card-head {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 12.5px;
+    font-weight: 600;
+    background: #fafbfc;
+  }
+  .card-body { padding: 10px 12px; }
+  details { margin-top: 6px; }
+  summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+  details pre {
+    background: #fafbfc;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 12px;
+    overflow-x: auto;
+  }
+  #empty { color: var(--muted); font-size: 13.5px; padding: 24px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>snippet extractor harness</h1>
+  <input id="filename" type="text" value="ThermostatAssembly.java" spellcheck="false" title="Filename — the extension picks the grammar, the basename becomes the snippet key suffix" />
+  <span id="status">ready</span>
+  <span class="spacer"></span>
+  <a href="/snippets.json" target="_blank">snippets.json</a>
+</header>
+<main>
+  <div id="editor-pane">
+    <textarea id="source" spellcheck="false"></textarea>
+    <div id="legend">
+      <code>// extract-code &lt;name&gt;</code> start &nbsp;·&nbsp;
+      <code>// extract-code end &lt;name&gt;</code> terminator &nbsp;·&nbsp;
+      <code>// extract-code ignore</code> strip everywhere &nbsp;·&nbsp;
+      <code>// extract-code ignore a, b</code> strip only from a, b
+    </div>
+  </div>
+  <div id="results"><div id="empty">Paste annotated source on the left — snippets appear here.</div></div>
+</main>
+
+<script src="/snippet-viewer.js"></script>
+<script>
+  const $source = document.getElementById("source");
+  const $filename = document.getElementById("filename");
+  const $status = document.getElementById("status");
+  const $results = document.getElementById("results");
+
+  // Cache-busting version for the viewer component's URL-keyed snippet cache:
+  // every extraction serves from a fresh /v/<n>/snippets.json host.
+  let version = 0;
+
+  const DEMO = `// extract-code thermostat-assembly
+// extract-code blink-matcher
+public class ThermostatAssembly extends Assembly implements CoreAssembly, SerialBlinkMatcher {
+    // extract-code ignore thermostat-assembly
+    // Serial baud rate used by the Arduino Mega thermostat adapter.
+    private static final int BAUD_RATE = 115200;
+
+    // extract-code ignore blink-matcher
+    // Create a constructor that follows the super Assembly
+    public ThermostatAssembly(String name) {
+        super(name);
+    }
+
+    // extract-code ignore
+    @Override
+    public void start() {}
+}
+`;
+
+  function setStatus(text, isError) {
+    $status.textContent = text;
+    $status.classList.toggle("error", !!isError);
+  }
+
+  async function extract() {
+    const filename = $filename.value.trim() || "Example.java";
+    const body = JSON.stringify({ source: $source.value, filename });
+    let data;
+    try {
+      const r = await fetch("/extract", { method: "POST", headers: { "Content-Type": "application/json" }, body });
+      data = await r.json();
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+    } catch (e) {
+      setStatus(e.message, true);
+      return;
+    }
+    version++;
+    render(data.snippets);
+  }
+
+  function render(snippets) {
+    const keys = Object.keys(snippets);
+    setStatus(`${keys.length} snippet${keys.length === 1 ? "" : "s"}`);
+    $results.innerHTML = "";
+    if (!keys.length) {
+      const div = document.createElement("div");
+      div.id = "empty";
+      div.textContent = "No snippets — add an // extract-code <name> marker above a declaration.";
+      $results.appendChild(div);
+      return;
+    }
+    for (const key of keys) {
+      const card = document.createElement("div");
+      card.className = "card";
+
+      const head = document.createElement("div");
+      head.className = "card-head";
+      head.textContent = key;
+      card.appendChild(head);
+
+      const bodyEl = document.createElement("div");
+      bodyEl.className = "card-body";
+
+      const viewer = document.createElement("snippet-viewer");
+      viewer.setAttribute("snippet-host", `/v/${version}`);
+      viewer.setAttribute("snippet", key);
+      bodyEl.appendChild(viewer);
+
+      const details = document.createElement("details");
+      const summary = document.createElement("summary");
+      summary.textContent = "raw text";
+      const pre = document.createElement("pre");
+      pre.textContent = snippets[key];
+      details.appendChild(summary);
+      details.appendChild(pre);
+      bodyEl.appendChild(details);
+
+      card.appendChild(bodyEl);
+      $results.appendChild(card);
+    }
+  }
+
+  let timer;
+  function schedule() {
+    clearTimeout(timer);
+    timer = setTimeout(extract, 400);
+  }
+  $source.addEventListener("input", schedule);
+  $filename.addEventListener("input", schedule);
+
+  $source.value = DEMO;
+  extract();
+</script>
+</body>
+</html>

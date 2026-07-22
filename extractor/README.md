@@ -201,6 +201,22 @@ node extractSnippets.mjs --reset --snippetFile=../example/snippets.json [<dir|fi
 
 `--reset` starts from `{}`; omit it to merge into an existing file.
 
+## Test harness (live preview)
+
+To see what snippets an annotated file yields *before* wiring it into CI, run
+the local harness and paste code into the page:
+
+```bash
+cd extractor && npm run harness    # -> http://localhost:8787
+```
+
+Left pane: filename (the extension picks the grammar) and your annotated
+source, re-extracted as you type. Right pane: every snippet the extractor
+produced, rendered through the real `<snippet-viewer>` component — same
+highlighting and chrome your docs readers get — with the raw text and the
+resulting `snippets.json` one click away. It runs the same `extractFromSource`
+as the CLI/action, so the preview is exactly what CI would emit.
+
 ## Testing
 
 ```bash

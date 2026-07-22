@@ -56,6 +56,13 @@ else
   echo "✅ ignored content was stripped (no secret in output)"
 fi
 
+echo "── marker directives stripped ───────────────"
+if jq -r '.[]' "$FILE" | grep -qF "extract-code"; then
+  echo "❌ a snippet leaked a raw 'extract-code' marker directive"; fail=1
+else
+  echo "✅ no marker directives leaked into any snippet"
+fi
+
 count=$(jq 'length' "$FILE")
 echo "── total snippets: $count (expected $want) ──────────"
 [ "$count" -eq "$want" ] || { echo "❌ expected $want snippets, got $count"; fail=1; }

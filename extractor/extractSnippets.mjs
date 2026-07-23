@@ -48,6 +48,9 @@ const LANGUAGES = {
   ".jsx": { load: () => require("tree-sitter-javascript"), comments: ["comment"], wholeFile: ["import_statement"], decorators: ["decorator"] },
   ".mjs": { load: () => require("tree-sitter-javascript"), comments: ["comment"], wholeFile: ["import_statement"], decorators: ["decorator"] },
   ".java": { load: () => require("tree-sitter-java"), comments: ["line_comment", "block_comment"], wholeFile: ["import_declaration"], decorators: [] },
+  ".cpp": { load: () => require("tree-sitter-cpp"), comments: ["line_comment", "block_comment"], wholeFile: ["import_declaration"], decorators: [] },
+  ".c": { load: () => require("tree-sitter-c"), comments: ["line_comment", "block_comment"], wholeFile: ["import_declaration"], decorators: [] },
+  ".ino": { load: () => require("tree-sitter-cpp"), comments: ["line_comment", "block_comment"], wholeFile: ["import_declaration"], decorators: [] },
 };
 
 // Cache one Parser per extension so we don't reload grammars per file.

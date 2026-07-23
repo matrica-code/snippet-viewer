@@ -2,8 +2,9 @@
 //
 // These drive extractFromSource() directly (no filesystem) so each case is a
 // small, readable source string paired with its expected snippet output. The
-// suite covers every documented marker use case across JS/TS/TSX and Java, plus
-// regression tests for the annotation/`modifiers` extraction bug.
+// suite covers every documented marker use case across JS/TS/TSX, Java and
+// C/C++/Arduino, plus regression tests for the annotation/`modifiers`
+// extraction bug.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -199,6 +200,88 @@ test("Java: an annotated method", () => {
     only(src, ".java"),
     `@GetMapping("/w")\npublic String describe() {\n    return "x";\n}`,
   );
+});
+
+// ---------------------------------------------------------------------------
+// C / C++ / Arduino
+// ---------------------------------------------------------------------------
+test("C: extracts a function", () => {
+  const src = [
+    `#include <stdio.h>`,
+    ``,
+    `// extract-code fn`,
+    `int add(int a, int b) {`,
+    `  return a + b;`,
+    `}`,
+    ``,
+  ].join("\n");
+  assert.equal(only(src, ".c"), `int add(int a, int b) {\n  return a + b;\n}`);
+});
+
+test("C: a typedef'd struct keeps its trailing semicolon", () => {
+  const src = [
+    `// extract-code s`,
+    `typedef struct {`,
+    `  int id;`,
+    `} Thing;`,
+    ``,
+  ].join("\n");
+  assert.equal(only(src, ".c"), `typedef struct {\n  int id;\n} Thing;`);
+});
+
+test("C: a marker on #include emits the whole file", () => {
+  const src = [
+    `// extract-code whole`,
+    `#include <stdio.h>`,
+    ``,
+    `int main(void) { return 0; }`,
+    ``,
+  ].join("\n");
+  const out = only(src, ".c");
+  assert.match(out, /#include <stdio\.h>/);
+  assert.match(out, /int main/);
+  assert.doesNotMatch(out, /extract-code/);
+});
+
+test("C++: a class marker swallows the trailing semicolon", () => {
+  const src = [
+    `// extract-code cls`,
+    `class Widget {`,
+    ` public:`,
+    `  int size() const { return 1; }`,
+    `};`,
+    ``,
+  ].join("\n");
+  assert.equal(only(src, ".cpp"), `class Widget {\n public:\n  int size() const { return 1; }\n};`);
+});
+
+test("C++: ignore strips a member from an enclosing class snippet", () => {
+  const src = [
+    `// extract-code cls`,
+    `class C {`,
+    ` public:`,
+    `  int keep = 1;`,
+    `  // extract-code ignore`,
+    `  const char* secret = "sk-do-not-leak";`,
+    `};`,
+    ``,
+  ].join("\n");
+  const out = only(src, ".cpp");
+  assert.doesNotMatch(out, /sk-do-not-leak/);
+  assert.match(out, /keep = 1;/);
+});
+
+test("ino: extracts Arduino sketch functions via the C++ grammar", () => {
+  const src = [
+    `#include <Arduino.h>`,
+    ``,
+    `// extract-code setup`,
+    `void setup() {`,
+    `  Serial.begin(9600);`,
+    `}`,
+    ``,
+  ].join("\n");
+  assert.equal(only(src, ".ino", "Blink.ino"), `void setup() {\n  Serial.begin(9600);\n}`);
 });
 
 // ---------------------------------------------------------------------------
@@ -466,6 +549,12 @@ test("smoke fixtures produce the expected snippet set", () => {
   assert.deepEqual(
     Object.keys(snippets).sort(),
     [
+      "c-function@sensor.c",
+      "c-struct@sensor.c",
+      "cpp-class@RingBuffer.cpp",
+      "cpp-method@RingBuffer.cpp",
+      "ino-loop@Blink.ino",
+      "ino-setup@Blink.ino",
       "java-class@WidgetService.java",
       "java-method@WidgetMembers.java",
       "java-property@WidgetMembers.java",

@@ -118,9 +118,10 @@
         <code>&lt;meta name="snippet-sources" content="./sources.json"&gt;</code>,
         each viewer can pull from a different file by naming a
         <code>source</code>. The manifest here maps
-        <code>frontend</code> &rarr; <code>frontend-snippets.json</code> and
-        <code>java</code> &rarr; <code>java-snippets.json</code> &mdash; both
-        produced by the snippet-extractor from the smoke-test fixtures.
+        <code>frontend</code> &rarr; <code>frontend-snippets.json</code>,
+        <code>java</code> &rarr; <code>java-snippets.json</code> and
+        <code>embedded</code> &rarr; <code>embedded-snippets.json</code> &mdash;
+        all produced by the snippet-extractor from the smoke-test fixtures.
       </p>
 
       <p>A TypeScript class from the <code>frontend</code> source:</p>
@@ -133,6 +134,35 @@
       <snippet-viewer
         source="java"
         snippet="java-class@WidgetService.java"
+      ></snippet-viewer>
+    </div>
+
+    <!-- Section: C / C++ / Arduino -->
+    <div class="section">
+      <h2>C / C++ / Arduino</h2>
+      <p>
+        The extractor also understands <code>.c</code>, <code>.cpp</code> and
+        <code>.ino</code> files (via the Tree-sitter C and C++ grammars). These
+        come from the <code>embedded</code> source:
+      </p>
+
+      <p>An Arduino sketch entry point:</p>
+      <snippet-viewer
+        source="embedded"
+        snippet="ino-setup@Blink.ino"
+      ></snippet-viewer>
+
+      <p>A C++ class (its <code>api_key_</code> member is hidden by an
+      <code>extract-code ignore</code> marker):</p>
+      <snippet-viewer
+        source="embedded"
+        snippet="cpp-class@RingBuffer.cpp"
+      ></snippet-viewer>
+
+      <p>A C function:</p>
+      <snippet-viewer
+        source="embedded"
+        snippet="c-function@sensor.c"
       ></snippet-viewer>
     </div>
 

@@ -2,5 +2,6 @@
   "default": "./snippets.json",
   "java": "./java-snippets.json",
   "frontend": "./frontend-snippets.json",
-  "features": "./feature-snippets.json"
+  "features": "./feature-snippets.json",
+  "embedded": "./embedded-snippets.json"
 }

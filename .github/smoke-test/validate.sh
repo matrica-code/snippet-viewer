@@ -2,14 +2,14 @@
 # Validates a snippets.json produced by the snippet-extractor smoke test.
 #
 # Usage: validate.sh <snippets.json> <mode>
-#   mode = ts | java | all   (which language's snippets to require)
+#   mode = ts | java | cpp | all   (which language's snippets to require)
 #
 # Asserts the expected keys exist, each carries its decorator/annotation token,
 # the `ignore` marker stripped the planted secret, and the total count matches.
 set -euo pipefail
 
-FILE="${1:?usage: validate.sh <snippets.json> <ts|java|all>}"
-MODE="${2:?usage: validate.sh <snippets.json> <ts|java|all>}"
+FILE="${1:?usage: validate.sh <snippets.json> <ts|java|cpp|all>}"
+MODE="${2:?usage: validate.sh <snippets.json> <ts|java|cpp|all>}"
 
 test -f "$FILE" || { echo "❌ $FILE was not produced"; exit 1; }
 jq -e . "$FILE" >/dev/null || { echo "❌ $FILE is not valid JSON"; exit 1; }
@@ -47,6 +47,17 @@ if [ "$MODE" = "java" ] || [ "$MODE" = "all" ]; then
   assert_key "java-property@WidgetMembers.java" "@Autowired"  # annotated field
   assert_key "java-method@WidgetMembers.java"   "@GetMapping" # annotated method
   want=$((want + 3))
+fi
+
+if [ "$MODE" = "cpp" ] || [ "$MODE" = "all" ]; then
+  echo "── C / C++ / Arduino ────────────────────────"
+  assert_key "c-struct@sensor.c"          "SensorReading"    # typedef'd struct
+  assert_key "c-function@sensor.c"        "to_fahrenheit"    # free function
+  assert_key "cpp-class@RingBuffer.cpp"   "class RingBuffer" # whole class body
+  assert_key "cpp-method@RingBuffer.cpp"  "RingBuffer::push" # out-of-class method
+  assert_key "ino-setup@Blink.ino"        "void setup"       # Arduino entry points
+  assert_key "ino-loop@Blink.ino"         "void loop"
+  want=$((want + 6))
 fi
 
 echo "── ignore marker ────────────────────────────"

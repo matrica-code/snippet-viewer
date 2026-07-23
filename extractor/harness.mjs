@@ -7,7 +7,9 @@
 //
 // Usage:
 //   npm run harness            # -> http://localhost:8787
+//   npm run harness:stop       # stop a running harness
 //   node harness.mjs --port=9000
+//   node harness.mjs --stop --port=9000
 
 import fs from "fs";
 import http from "http";
@@ -18,6 +20,17 @@ import { extractFromSource, LANGUAGES } from "./extractSnippets.mjs";
 const here = path.dirname(url.fileURLToPath(import.meta.url));
 const portArg = process.argv.find((a) => a.startsWith("--port="));
 const PORT = portArg ? Number(portArg.slice("--port=".length)) : 8787;
+
+// `--stop`: ask the harness running on PORT to shut down, instead of serving.
+if (process.argv.includes("--stop")) {
+  try {
+    const res = await fetch(`http://localhost:${PORT}/shutdown`, { method: "POST" });
+    console.log(res.ok ? `stopped harness on port ${PORT}` : `harness on port ${PORT} answered ${res.status}`);
+  } catch {
+    console.log(`no harness running on port ${PORT}`);
+  }
+  process.exit(0);
+}
 
 // Latest extraction result. The page requests it as /v/<n>/snippets.json,
 // bumping <n> per extraction to bust the viewer component's URL-keyed cache.
@@ -61,6 +74,13 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && pathname === "/extensions") {
     return send(res, 200, JSON.stringify(Object.keys(LANGUAGES)), "application/json");
   }
+  if (req.method === "POST" && pathname === "/shutdown") {
+    send(res, 200, JSON.stringify({ stopped: true }), "application/json");
+    console.log("shutdown requested — bye");
+    // Exit on the next tick so the response flushes even on a keep-alive socket.
+    setTimeout(() => process.exit(0), 50);
+    return;
+  }
   if (req.method === "POST" && pathname === "/extract") {
     try {
       const { source = "", filename = "" } = JSON.parse((await readBody(req)) || "{}");
@@ -80,6 +100,15 @@ const server = http.createServer(async (req, res) => {
     }
   }
   send(res, 404, "not found", "text/plain");
+});
+
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`port ${PORT} is already in use — another harness is probably running.`);
+    console.error(`stop it with: npm run harness:stop${PORT === 8787 ? "" : ` -- --port=${PORT}`}`);
+    process.exit(1);
+  }
+  throw err;
 });
 
 server.listen(PORT, () => {

@@ -1,0 +1,8 @@
+{
+  "ino-setup@Blink.ino": "void setup() {\n  pinMode(LED_PIN, OUTPUT);\n  Serial.begin(9600);\n}",
+  "ino-loop@Blink.ino": "void loop() {\n  digitalWrite(LED_PIN, HIGH);\n  delay(500);\n  digitalWrite(LED_PIN, LOW);\n  delay(500);\n}",
+  "cpp-class@RingBuffer.cpp": "class RingBuffer {\n public:\n  explicit RingBuffer(size_t capacity) : capacity_(capacity) {}\n\n  bool push(int value);\n\n  // A token the rendered docs must never show — proves `ignore` strips it.\n\n private:\n  size_t capacity_;\n  size_t size_ = 0;\n  int data_[64];\n};",
+  "cpp-method@RingBuffer.cpp": "bool RingBuffer::push(int value) {\n  if (size_ == capacity_) {\n    return false;\n  }\n  data_[size_++] = value;\n  return true;\n}",
+  "c-struct@sensor.c": "typedef struct {\n  int id;\n  double celsius;\n} SensorReading;",
+  "c-function@sensor.c": "double to_fahrenheit(const SensorReading *reading) {\n  return reading->celsius * 9.0 / 5.0 + 32.0;\n}"
+}

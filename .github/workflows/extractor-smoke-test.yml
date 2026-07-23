@@ -2,14 +2,16 @@ name: extractor-smoke-test
 
 # Manual end-to-end test of the PUBLISHED snippet-extractor action.
 # Runs `matrica-code/snippet-viewer/extractor@main` over the fixtures in
-# .github/smoke-test/fixtures (TypeScript + Java, covering class / method /
-# property markers and decorators/annotations), asserts the output is correct,
-# and attaches the generated snippets.json as a workflow artifact.
+# .github/smoke-test/fixtures (TypeScript + Java + C/C++/Arduino, covering
+# class / method / property markers and decorators/annotations), asserts the
+# output is correct, and attaches the generated snippets.json as a workflow
+# artifact.
 #
-# Three jobs:
-#   both-languages  — scans every fixture (9 snippets)
+# Four jobs:
+#   all-languages   — scans every fixture (15 snippets)
 #   typescript-only — scans just the TS/TSX fixtures (6 snippets)
 #   java-only       — scans just the Java fixtures (3 snippets)
+#   c-cpp-only      — scans just the C/C++/Arduino fixtures (6 snippets)
 #
 # Run it from the Actions tab → "extractor-smoke-test" → "Run workflow".
 
@@ -22,7 +24,7 @@ on:
         default: "latest"
 
 jobs:
-  both-languages:
+  all-languages:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,7 +32,7 @@ jobs:
       # The action under test. Pin to extractor-vX.Y.Z to test a specific release;
       # `@main` always tests the current action definition on the default branch.
       - id: extract
-        name: Run published snippet-extractor action (TS + Java)
+        name: Run published snippet-extractor action (TS + Java + C/C++)
         uses: matrica-code/snippet-viewer/extractor@main
         with:
           paths: .github/smoke-test/fixtures
@@ -102,3 +104,29 @@ jobs:
 
       - name: Validate (Java)
         run: bash .github/smoke-test/validate.sh "${{ steps.extract.outputs.snippet-file }}" java
+
+  c-cpp-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: extract
+        name: Run published snippet-extractor action (C/C++/Arduino only)
+        uses: matrica-code/snippet-viewer/extractor@main
+        with:
+          paths: .github/smoke-test/fixtures/c-cpp
+          snippet-file: smoke-test-snippets-cpp.json
+          reset: "true"
+          image-tag: ${{ inputs.image-tag }}
+          upload-artifact: "true"
+          artifact-name: smoke-test-snippets-cpp
+          artifact-retention-days: "7"
+
+      - name: Show generated snippets
+        run: |
+          echo "::group::smoke-test-snippets-cpp.json"
+          cat smoke-test-snippets-cpp.json
+          echo "::endgroup::"
+
+      - name: Validate (C/C++/Arduino)
+        run: bash .github/smoke-test/validate.sh "${{ steps.extract.outputs.snippet-file }}" cpp

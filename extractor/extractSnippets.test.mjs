@@ -453,6 +453,412 @@ test("un-scoped ignore still strips from every enclosing snippet", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Additive snippets: one <name> reused on several markers in a file collects
+// every marked piece, in source order, into a single snippet — for showing an
+// include and a macro alongside the code that uses them.
+// ---------------------------------------------------------------------------
+test("a reused name concatenates its segments in source order", () => {
+  const src = [
+    `// extract-code wifi`,
+    `#include <WiFi.h>`,
+    ``,
+    `// extract-code wifi`,
+    `#define WIFI_SSID "net"`,
+    ``,
+    `static int retries = 0;`,
+    ``,
+    `// extract-code wifi`,
+    `void connect() {`,
+    `  WiFi.begin(WIFI_SSID);`,
+    `}`,
+    ``,
+  ].join("\n");
+  assert.equal(
+    only(src, ".ino", "Sketch.ino"),
+    [
+      `#include <WiFi.h>`,
+      ``,
+      `#define WIFI_SSID "net"`,
+      ``,
+      `void connect() {`,
+      `  WiFi.begin(WIFI_SSID);`,
+      `}`,
+    ].join("\n"),
+  );
+});
+
+test("segments skip the unmarked code between them", () => {
+  const src = [
+    `// extract-code parts`,
+    `const first = 1;`,
+    ``,
+    `const NOT_IN_SNIPPET = "skipped";`,
+    ``,
+    `// extract-code parts`,
+    `const second = 2;`,
+    ``,
+  ].join("\n");
+  const out = only(src, ".ts");
+  assert.equal(out, `const first = 1;\n\nconst second = 2;`);
+  assert.doesNotMatch(out, /skipped/);
+});
+
+test("each segment can be grouped with its own terminator", () => {
+  const src = [
+    `// extract-code wifi`,
+    `#include <WiFi.h>`,
+    `#include <WiFiClient.h>`,
+    `// extract-code end wifi`,
+    `#include <stdio.h>`,
+    ``,
+    `// extract-code wifi`,
+    `#define WIFI_SSID "net"`,
+    `#define WIFI_PASS "pw"`,
+    `// extract-code end wifi`,
+    ``,
+    `// extract-code wifi`,
+    `void connect() { WiFi.begin(WIFI_SSID, WIFI_PASS); }`,
+    ``,
+  ].join("\n");
+  assert.equal(
+    only(src, ".c", "main.c"),
+    [
+      `#include <WiFi.h>`,
+      `#include <WiFiClient.h>`,
+      ``,
+      `#define WIFI_SSID "net"`,
+      `#define WIFI_PASS "pw"`,
+      ``,
+      `void connect() { WiFi.begin(WIFI_SSID, WIFI_PASS); }`,
+    ].join("\n"),
+  );
+});
+
+test("a terminator binds to its own segment, not an earlier one", () => {
+  // Regression: segment 1 has no terminator of its own, so it must NOT run to
+  // segment 2's `end` marker and duplicate what segment 2 already contributes.
+  const src = [
+    `// extract-code wifi`,
+    `#include <WiFi.h>`,
+    ``,
+    `// extract-code wifi`,
+    `#define WIFI_SSID "net"`,
+    `#define WIFI_PASS "pw"`,
+    `// extract-code end wifi`,
+    ``,
+    `// extract-code wifi`,
+    `void connect() { WiFi.begin(WIFI_SSID, WIFI_PASS); }`,
+    ``,
+  ].join("\n");
+  assert.equal(
+    only(src, ".ino", "Sketch.ino"),
+    [
+      `#include <WiFi.h>`,
+      ``,
+      `#define WIFI_SSID "net"`,
+      `#define WIFI_PASS "pw"`,
+      ``,
+      `void connect() { WiFi.begin(WIFI_SSID, WIFI_PASS); }`,
+    ].join("\n"),
+  );
+});
+
+test("an additive name does not trigger whole-file mode on an include segment", () => {
+  const src = [
+    `// extract-code pair`,
+    `#include <WiFi.h>`,
+    ``,
+    `int secretHelper() { return 42; }`,
+    ``,
+    `// extract-code pair`,
+    `void use() { WiFi.begin(); }`,
+    ``,
+  ].join("\n");
+  const out = only(src, ".c", "main.c");
+  assert.doesNotMatch(out, /secretHelper/);
+  assert.equal(out, `#include <WiFi.h>\n\nvoid use() { WiFi.begin(); }`);
+});
+
+test("a single import marker still emits the whole file", () => {
+  const src = [
+    `// extract-code whole`,
+    `import { a } from "./a";`,
+    ``,
+    `const other = 1;`,
+    ``,
+  ].join("\n");
+  assert.match(only(src, ".ts"), /const other = 1;/);
+});
+
+test("additive segments each re-indent to column 0", () => {
+  const src = [
+    `class C {`,
+    `  // extract-code bits`,
+    `  a() { return 1; }`,
+    ``,
+    `  // extract-code bits`,
+    `  b() { return 2; }`,
+    `}`,
+    ``,
+  ].join("\n");
+  assert.equal(only(src, ".ts"), `a() { return 1; }\n\nb() { return 2; }`);
+});
+
+test("ignore still applies inside each additive segment", () => {
+  const src = [
+    `// extract-code bits`,
+    `function f() {`,
+    `  keep1();`,
+    `  // extract-code ignore`,
+    `  const secret = "sk-do-not-leak";`,
+    `}`,
+    ``,
+    `// extract-code bits`,
+    `function g() {`,
+    `  // extract-code ignore start`,
+    `  hidden1();`,
+    `  hidden2();`,
+    `  // extract-code ignore end`,
+    `  keep2();`,
+    `}`,
+    ``,
+  ].join("\n");
+  const out = only(src, ".ts");
+  assert.doesNotMatch(out, /sk-do-not-leak|hidden/);
+  assert.match(out, /keep1\(\);/);
+  assert.match(out, /keep2\(\);/);
+  assert.doesNotMatch(out, /extract-code/);
+});
+
+test("additive names stay independent of other snippets in the file", () => {
+  const src = [
+    `// extract-code bits`,
+    `const a = 1;`,
+    ``,
+    `// extract-code solo`,
+    `const b = 2;`,
+    ``,
+    `// extract-code bits`,
+    `const c = 3;`,
+    ``,
+  ].join("\n");
+  const s = extract(src, ".ts");
+  assert.deepEqual(Object.keys(s).sort(), ["bits@Fixture.ts", "solo@Fixture.ts"]);
+  assert.equal(s["bits@Fixture.ts"], `const a = 1;\n\nconst c = 3;`);
+  assert.equal(s["solo@Fixture.ts"], `const b = 2;`);
+});
+
+test("Java: an additive name joins an import with the code that uses it", () => {
+  const src = [
+    `package com.example;`,
+    ``,
+    `// extract-code autosave`,
+    `import com.example.Autosave;`,
+    `// extract-code end autosave`,
+    ``,
+    `public class C {`,
+    `  // extract-code autosave`,
+    `  public void save() { new Autosave().run(); }`,
+    `}`,
+    ``,
+  ].join("\n");
+  assert.equal(
+    only(src, ".java", "C.java"),
+    `import com.example.Autosave;\n\npublic void save() { new Autosave().run(); }`,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Block ignore: `ignore start` ... `ignore end` brackets a run of loose lines
+// the AST wouldn't bundle into one node — the ignore-side counterpart of the
+// `extract-code end <name>` terminator.
+// ---------------------------------------------------------------------------
+test("block ignore strips everything between start and end", () => {
+  const src = [
+    `// extract-code fn`,
+    `function f() {`,
+    `  keep1();`,
+    `  // extract-code ignore start`,
+    `  const secret = "sk-do-not-leak";`,
+    `  boilerplate();`,
+    `  more();`,
+    `  // extract-code ignore end`,
+    `  keep2();`,
+    `}`,
+    ``,
+  ].join("\n");
+  assert.equal(only(src, ".ts"), `function f() {\n  keep1();\n  keep2();\n}`);
+});
+
+test("C: block ignore strips an option-parsing preamble from a main() snippet", () => {
+  const src = [
+    `// extract-code arduino-s1`,
+    `int main(int argc, char *argv[]) {`,
+    `  // extract-code ignore start arduino-s1`,
+    `  int console = 0;`,
+    `  signed char c;`,
+    `  while ((c = getopt(argc, argv, "hc:")) != -1) {`,
+    `    switch (c) {`,
+    `    case 'h':`,
+    `      return usage();`,
+    `    }`,
+    `  }`,
+    `  srand(time(NULL));`,
+    `  // extract-code ignore end arduino-s1`,
+    `  run();`,
+    `  return 0;`,
+    `}`,
+    ``,
+  ].join("\n");
+  const out = only(src, ".c", "main.c");
+  assert.equal(out, `int main(int argc, char *argv[]) {\n  run();\n  return 0;\n}`);
+});
+
+test("block ignore is scoped to the snippets it names", () => {
+  const src = [
+    `// extract-code full`,
+    `// extract-code lite`,
+    `function f() {`,
+    `  keep();`,
+    `  // extract-code ignore start lite`,
+    `  detail1();`,
+    `  detail2();`,
+    `  // extract-code ignore end lite`,
+    `}`,
+    ``,
+  ].join("\n");
+  const s = extract(src, ".ts");
+  assert.match(s["full@Fixture.ts"], /detail1\(\);\n  detail2\(\);/);
+  assert.doesNotMatch(s["lite@Fixture.ts"], /detail/);
+  assert.match(s["lite@Fixture.ts"], /keep\(\);/);
+});
+
+test("an un-scoped block ignore strips from every enclosing snippet", () => {
+  const src = [
+    `// extract-code a`,
+    `// extract-code b`,
+    `function f() {`,
+    `  // extract-code ignore start`,
+    `  secret1();`,
+    `  secret2();`,
+    `  // extract-code ignore end`,
+    `  keep();`,
+    `}`,
+    ``,
+  ].join("\n");
+  const s = extract(src, ".ts");
+  assert.doesNotMatch(s["a@Fixture.ts"], /secret/);
+  assert.doesNotMatch(s["b@Fixture.ts"], /secret/);
+});
+
+test("block ignore markers never appear in output and mint no snippet", () => {
+  const src = [
+    `// extract-code fn`,
+    `function f() {`,
+    `  // extract-code ignore start`,
+    `  x();`,
+    `  // extract-code ignore end`,
+    `  keep();`,
+    `}`,
+    ``,
+  ].join("\n");
+  const s = extract(src, ".ts");
+  assert.deepEqual(Object.keys(s), ["fn@Fixture.ts"]);
+  assert.doesNotMatch(s["fn@Fixture.ts"], /extract-code/);
+});
+
+test("two block ignores in the same body are independent", () => {
+  const src = [
+    `// extract-code fn`,
+    `function f() {`,
+    `  // extract-code ignore start`,
+    `  drop1();`,
+    `  // extract-code ignore end`,
+    `  keep();`,
+    `  // extract-code ignore start`,
+    `  drop2();`,
+    `  // extract-code ignore end`,
+    `}`,
+    ``,
+  ].join("\n");
+  assert.equal(only(src, ".ts"), `function f() {\n  keep();\n}`);
+});
+
+test("nested block ignores pair like brackets", () => {
+  const src = [
+    `// extract-code fn`,
+    `function f() {`,
+    `  // extract-code ignore start outer`,
+    `  a();`,
+    `  // extract-code ignore start inner`,
+    `  b();`,
+    `  // extract-code ignore end inner`,
+    `  c();`,
+    `  // extract-code ignore end outer`,
+    `  keep();`,
+    `}`,
+    ``,
+  ].join("\n");
+  const s = extract(src, ".ts");
+  // Only `outer`/`inner` are scope names, so `fn` keeps everything...
+  assert.match(s["fn@Fixture.ts"], /a\(\);/);
+  assert.match(s["fn@Fixture.ts"], /keep\(\);/);
+  assert.doesNotMatch(s["fn@Fixture.ts"], /extract-code/);
+});
+
+test("an unterminated block ignore runs to end of file", () => {
+  const src = [
+    `// extract-code fn`,
+    `function f() {`,
+    `  keep();`,
+    `  // extract-code ignore start`,
+    `  secret();`,
+    `}`,
+    ``,
+  ].join("\n");
+  const out = only(src, ".ts");
+  assert.doesNotMatch(out, /secret/);
+  assert.match(out, /keep\(\);/);
+});
+
+test("an orphan `ignore end` is skipped without dropping content", () => {
+  const src = [
+    `// extract-code fn`,
+    `function f() {`,
+    `  keep();`,
+    `  // extract-code ignore end`,
+    `  alsoKeep();`,
+    `}`,
+    ``,
+  ].join("\n");
+  const out = only(src, ".ts");
+  assert.match(out, /keep\(\);/);
+  assert.match(out, /alsoKeep\(\);/);
+  assert.doesNotMatch(out, /extract-code/);
+});
+
+test("Java: block ignore strips a run of statements from a method snippet", () => {
+  const src = [
+    `public class C {`,
+    `  // extract-code m`,
+    `  public void m() {`,
+    `    setup();`,
+    `    // extract-code ignore start`,
+    `    String token = "sk-do-not-leak";`,
+    `    warmUp(token);`,
+    `    // extract-code ignore end`,
+    `    run();`,
+    `  }`,
+    `}`,
+    ``,
+  ].join("\n");
+  const out = only(src, ".java", "C.java");
+  assert.doesNotMatch(out, /sk-do-not-leak/);
+  assert.match(out, /setup\(\);/);
+  assert.match(out, /run\(\);/);
+});
+
+// ---------------------------------------------------------------------------
 // Terminator: `// extract-code end <name>` bounds a snippet explicitly, so a
 // run of loose sibling statements can be grouped under one marker.
 // ---------------------------------------------------------------------------

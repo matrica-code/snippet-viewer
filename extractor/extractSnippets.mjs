@@ -15,6 +15,17 @@
 //                                    wouldn't bundle on its own
 //   // extract-code ignore        -> strip the following node from every snippet
 //   // extract-code ignore a, b   -> strip it only from snippets a and b
+//   // extract-code ignore start  -> block ignore: strip everything from here up
+//   ...                              to the matching `ignore end` — the ignore-side
+//   // extract-code ignore end        counterpart of `extract-code end <name>`,
+//                                     for a run of loose lines the AST won't bundle
+//   // extract-code ignore start a, b / ignore end a, b
+//                                  -> same, scoped to snippets a and b
+//
+//   Reusing one <name> on several markers in a file is *additive*: each marker
+//   contributes a segment and they are concatenated, in source order, into one
+//   snippet — for pulling an include, a macro and the code that uses them out of
+//   the distinct regions of a file they legitimately live in.
 //
 // Behaviors preserved from the jscodeshift version:
 //   * snippet keys are `<name>@<basename>` so the same name in two files is safe
@@ -128,11 +139,20 @@ function isMarker(comment) {
   return /^extract-code(?:\s|$)/.test(body);
 }
 
+// A comma-separated scope list -> Set of snippet names, or null for "every
+// snippet" (the un-scoped form).
+function parseScope(text) {
+  const names = text.split(",").map((s) => s.trim()).filter(Boolean);
+  return names.length ? new Set(names) : null;
+}
+
 // Classify a marker comment's directive from the text after `extract-code`:
-//   extract-code <name>          -> { kind: "start", name }
-//   extract-code end <name>      -> { kind: "end", name }        (snippet terminator)
-//   extract-code ignore          -> { kind: "ignore", names: null }   (global)
-//   extract-code ignore a, b     -> { kind: "ignore", names: Set{a,b} } (scoped)
+//   extract-code <name>            -> { kind: "start", name }
+//   extract-code end <name>        -> { kind: "end", name }      (snippet terminator)
+//   extract-code ignore            -> { kind: "ignore", names: null }   (global)
+//   extract-code ignore a, b       -> { kind: "ignore", names: Set{a,b} } (scoped)
+//   extract-code ignore start [a, b] -> { kind: "ignore-start", names }  (block open)
+//   extract-code ignore end   [a, b] -> { kind: "ignore-end", names }    (block close)
 function classifyMarker(commentText) {
   const after = (commentText.split(MARKER)[1] ?? "")
     .replace(/\*\/\s*$/, "") // trailing block-comment close
@@ -141,8 +161,13 @@ function classifyMarker(commentText) {
   const [head, ...rest] = after.split(/\s+/);
   const tail = rest.join(" ").trim();
   if (head === "ignore") {
-    const names = tail.split(",").map((s) => s.trim()).filter(Boolean);
-    return { kind: "ignore", names: names.length ? new Set(names) : null };
+    // `ignore start` / `ignore end` open and close a *block* ignore; anything
+    // else after `ignore` is a scope list applying to the next node.
+    const [sub, ...subRest] = rest;
+    if (sub === "start" || sub === "end") {
+      return { kind: sub === "start" ? "ignore-start" : "ignore-end", names: parseScope(subRest.join(" ")) };
+    }
+    return { kind: "ignore", names: parseScope(tail) };
   }
   if (head === "end") return { kind: "end", name: tail };
   return { kind: "start", name: after };
@@ -260,6 +285,22 @@ function stripMarkerLines(text) {
   return text.replace(MARKER_LINE_RE, "");
 }
 
+// Index in a stack of unclosed `ignore start` markers that an `ignore end`
+// closes: the nearest one with an identical scope list, else the nearest one at
+// all (-1 when the stack is empty).
+function scopeKey(names) {
+  return names ? [...names].sort().join(",") : "";
+}
+function matchOpenIgnore(open, names) {
+  if (names) {
+    const key = scopeKey(names);
+    for (let i = open.length - 1; i >= 0; i--) {
+      if (scopeKey(open[i].names) === key) return i;
+    }
+  }
+  return open.length - 1;
+}
+
 // ---------------------------------------------------------------------------
 // Extraction (pure: operates on a source string, no filesystem)
 // ---------------------------------------------------------------------------
@@ -273,7 +314,8 @@ function extractFromSource(source, ext, snippets, basename) {
 
   const comments = collectComments(root, cfg.comments);
   const markers = comments.map((c) => ({ comment: c, ...classifyMarker(c.text) }))
-    .filter((m) => isMarker(m.comment));
+    .filter((m) => isMarker(m.comment))
+    .sort((a, b) => a.comment.startIndex - b.comment.startIndex); // block ignores pair in source order
 
   // Positions of every *start* marker, used to truncate a snippet where the
   // next one begins. Terminators and ignores are not partition boundaries.
@@ -281,6 +323,19 @@ function extractFromSource(source, ext, snippets, basename) {
     .filter((m) => m.kind === "start" && m.name)
     .map((m) => m.comment.startIndex)
     .sort((a, b) => a - b);
+
+  // Every start marker per name, in source order. A name used more than once is
+  // an *additive* snippet: each marker contributes a segment, concatenated in
+  // source order. Whole-file mode is suppressed for those — an author who
+  // composed segments by hand is asking for those pieces, not the entire file
+  // (which is exactly what a leading `#include`/`import` segment would trigger).
+  const startsByName = new Map();
+  for (const m of markers) {
+    if (m.kind !== "start" || !m.name) continue;
+    const list = startsByName.get(m.name) ?? [];
+    list.push(m.comment.startIndex);
+    startsByName.set(m.name, list);
+  }
 
   // Explicit snippet terminators: name -> sorted positions of `extract-code end <name>`.
   const endByName = new Map();
@@ -293,16 +348,56 @@ function extractFromSource(source, ext, snippets, basename) {
 
   // Pass 1: gather ignore ranges (line-expanded) so node-mode snippets can splice
   // them out. `names` scopes an ignore to specific snippets (null = every snippet).
+  //
+  // Two forms feed the same list: the node form (`ignore` + the unit that
+  // follows) and the block form (`ignore start` ... `ignore end`), which brackets
+  // a run of loose lines the AST wouldn't bundle — the ignore-side counterpart of
+  // the `extract-code end <name>` terminator.
   const ignoreRanges = [];
+  const openIgnores = []; // stack of unclosed `ignore start` markers
   for (const m of markers) {
-    if (m.kind !== "ignore") continue;
-    const unit = resolveUnit(m.comment, cfg, source, root);
-    if (!unit) continue;
-    const [s, e] = expandToFullLines(source, m.comment.startIndex, unit.maxEnd);
-    ignoreRanges.push({ s, e, names: m.names });
+    if (m.kind === "ignore") {
+      const unit = resolveUnit(m.comment, cfg, source, root);
+      if (!unit) continue;
+      const [s, e] = expandToFullLines(source, m.comment.startIndex, unit.maxEnd);
+      ignoreRanges.push({ s, e, names: m.names });
+      continue;
+    }
+    if (m.kind === "ignore-start") {
+      openIgnores.push(m);
+      continue;
+    }
+    if (m.kind === "ignore-end") {
+      // Pair with the nearest unclosed start carrying the same scope list; a
+      // scope-less `ignore end` (or one that matches nothing) closes the nearest
+      // unclosed start, so nesting behaves like brackets.
+      const idx = matchOpenIgnore(openIgnores, m.names);
+      if (idx < 0) {
+        console.warn(`warning: ${basename}: \`${MARKER} ignore end\` with no open \`ignore start\` — skipped`);
+        continue;
+      }
+      const [start] = openIgnores.splice(idx, 1);
+      const [s, e] = expandToFullLines(source, start.comment.startIndex, m.comment.endIndex);
+      ignoreRanges.push({ s, e, names: start.names });
+    }
+  }
+  // An unterminated block ignore runs to end of file: hiding too much is visible
+  // to the author, whereas leaking what they meant to hide is not.
+  for (const start of openIgnores) {
+    console.warn(`warning: ${basename}: unterminated \`${MARKER} ignore start\` — ignoring to end of file`);
+    const [s, e] = expandToFullLines(source, start.comment.startIndex, source.length);
+    ignoreRanges.push({ s, e, names: start.names, open: true });
   }
 
-  // Pass 2: emit named snippets.
+  // Pass 2: emit named snippets. Segments accumulate per key so a reused name
+  // concatenates instead of the last marker winning.
+  const segments = new Map();
+  const addSegment = (key, text) => {
+    const parts = segments.get(key) ?? [];
+    parts.push(text);
+    segments.set(key, parts);
+  };
+
   for (const m of markers) {
     if (m.kind !== "start") continue;
 
@@ -313,14 +408,21 @@ function extractFromSource(source, ext, snippets, basename) {
     const unit = resolveUnit(m.comment, cfg, source, root);
     if (!unit) continue;
 
+    // Where this name's next segment begins — a terminator past that point
+    // belongs to that segment, not this one, so an additive name's segments each
+    // bind to their own `extract-code end <name>` (or to none).
+    const starts = startsByName.get(name) ?? [];
+    const nextSegment = starts.find((p) => p > m.comment.startIndex) ?? Infinity;
+
     // An explicit terminator (`extract-code end <name>`) after this marker bounds
     // the snippet directly — for grouping loose statements the AST can't. The
     // earliest matching terminator past the start wins.
-    const ends = (endByName.get(name) ?? []).filter((p) => p > unit.segStart);
+    const ends = (endByName.get(name) ?? []).filter((p) => p > unit.segStart && p < nextSegment);
     const terminator = ends.length ? Math.min(...ends) : null;
 
-    // Whole-file mode: marker leads an import -> emit the full source.
-    if (terminator == null && cfg.wholeFile.includes(unit.type)) {
+    // Whole-file mode: marker leads an import -> emit the full source. Off for
+    // additive names, whose segments are the point.
+    if (terminator == null && starts.length === 1 && cfg.wholeFile.includes(unit.type)) {
       snippets[key] = stripMarkerLines(source).trimEnd() + "\n";
       continue;
     }
@@ -347,7 +449,10 @@ function extractFromSource(source, ext, snippets, basename) {
     // this snippet (scoped ignores only strip from their named targets).
     let text = source.slice(unit.segStart, endIndex);
     const inner = ignoreRanges
-      .filter(({ s, e, names }) => s >= unit.segStart && e <= endIndex && (names == null || names.has(name)))
+      // A closed ignore must sit wholly inside the snippet; an `open` one (an
+      // unterminated `ignore start`) runs past the end, so it clips to it.
+      .filter(({ s, e, open, names }) => s >= unit.segStart && (open || e <= endIndex) && (names == null || names.has(name)))
+      .map(({ s, e }) => ({ s, e: Math.min(e, endIndex) }))
       .sort((a, b) => b.s - a.s); // descending so earlier splices don't shift later offsets
     for (const { s, e } of inner) {
       text = text.slice(0, s - unit.segStart) + text.slice(e - unit.segStart);
@@ -367,7 +472,13 @@ function extractFromSource(source, ext, snippets, basename) {
         .join("\n");
     }
 
-    snippets[key] = text.trimEnd();
+    addSegment(key, text.trimEnd());
+  }
+
+  // Join an additive snippet's segments with a blank line: they come from
+  // discontiguous regions of the file, and the gap reads as that discontinuity.
+  for (const [key, parts] of segments) {
+    snippets[key] = parts.filter((t) => t.trim()).join("\n\n");
   }
 
   return snippets;

@@ -5,7 +5,7 @@ A vanilla web component for displaying syntax-highlighted code snippets from a J
 This repo is two halves of one pipeline:
 
 - **Viewer (this component)** — the _consumer_: renders a `snippets.json` keyed `name@filename.ext`.
-- **[`extractor/`](extractor/README.md)** — the _producer_: harvests `// extract-code` markers from your source (JS/TS/TSX/Java) into exactly that `snippets.json`. Runs as an npm package (`npx @matrica-code/snippet-extractor`), a GitHub Action, or a container image.
+- **[`extractor/`](extractor/README.md)** — the _producer_: harvests `// extract-code` markers from your source (JS/TS/TSX, Java, C/C++/Arduino) into exactly that `snippets.json`. Runs as an npm package (`npx @matrica-code/snippet-extractor`), a GitHub Action, or a container image.
 
 ## Features
 

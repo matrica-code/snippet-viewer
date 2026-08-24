@@ -14,7 +14,12 @@ Parses with [Tree-sitter](https://tree-sitter.github.io/), so it works across
 // extract-code end <name>   // (optional) explicitly end snippet <name> here
 // extract-code ignore       // strip the following node from every snippet it lives in
 // extract-code ignore a, b  // strip it only from snippets a and b
+// extract-code ignore start // strip everything up to the matching `ignore end`
+// extract-code ignore end   //   ...(both accept the same `a, b` scope list)
 ```
+
+Reusing one `<name>` on several markers in a file is **additive** — the pieces
+concatenate into a single snippet. See [Additive snippets](#additive-snippets).
 
 If the marked node is an `import`, the **whole file** is emitted.
 
@@ -44,6 +49,66 @@ String val = service.get("org.group", "key");
 // extract-code end data-storage
 ```
 
+### Additive snippets
+
+A `<name>` used on more than one marker in the same file doesn't overwrite —
+every marker contributes a **segment**, and they concatenate in source order into
+one snippet. This is for the pieces that legitimately live apart: an include, a
+macro, and the code that uses them, each in its own region of the file.
+
+```c
+// extract-code wifi-connect
+#include <WiFi.h>
+#include <WiFiClient.h>
+// extract-code end wifi-connect
+#include <stdio.h>          // not marked -> not in the snippet
+
+// extract-code wifi-connect
+#define WIFI_SSID "my-network"
+#define WIFI_PASS "hunter2"
+// extract-code end wifi-connect
+
+static int retries = 0;     // not marked -> not in the snippet
+
+// extract-code wifi-connect
+void connectWifi() {
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+}
+```
+
+`wifi-connect@Sketch.ino` becomes:
+
+```c
+#include <WiFi.h>
+#include <WiFiClient.h>
+
+#define WIFI_SSID "my-network"
+#define WIFI_PASS "hunter2"
+
+void connectWifi() {
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+}
+```
+
+No file reorganization and no fake tutorial-only source — the file keeps its real
+structure and the snippet reads as one contiguous example.
+
+Details worth knowing:
+
+- Segments join with a **blank line** between them, since they come from
+  discontiguous regions.
+- Each segment follows the normal extent rules: the whole node by default, or up
+  to `extract-code end <name>` to group a run of loose lines. A terminator binds
+  to the nearest preceding segment of that name, so each segment can have its
+  own — as above, where the two `#include`s and the two `#define`s are grouped.
+- Each segment re-indents to column 0 independently, so a segment lifted from
+  inside a class or function body isn't left with stray leading whitespace.
+- **Whole-file mode is off for additive names.** A single marker on an
+  `import`/`#include` still emits the entire file (unchanged); once a name has
+  two or more markers, an include segment contributes just the include — the
+  hand-composed segments are the point.
+- `ignore` (both forms) still applies within each segment.
+
 ### Reusing one class across several snippets
 
 `ignore` scoping lets one source class back several snippets that each expose a
@@ -62,6 +127,58 @@ public class ExampleClass {
 
 An `ignore` with no names strips from **every** enclosing snippet (the original
 behavior). Marker directives themselves never appear in rendered output.
+
+### Ignoring a run of loose lines
+
+`ignore` on its own removes the **one node** that follows it. When what you want
+gone isn't a single node — a preamble of option parsing, some setup boilerplate
+in the middle of a function — bracket it with `ignore start` / `ignore end`.
+This is the ignore-side counterpart of the `extract-code end <name>` terminator:
+
+```c
+// extract-code arduino-s1
+int main(int argc, char *argv[]) {
+  // extract-code ignore start arduino-s1
+  int console = 0;
+  signed char c;
+  while ((c = getopt(argc, argv, "hc:")) != -1) { /* ... */ }
+  srand(time(NULL));
+  // extract-code ignore end arduino-s1
+
+  run();
+  return 0;
+}
+```
+
+`arduino-s1` yields just:
+
+```c
+int main(int argc, char *argv[]) {
+  run();
+  return 0;
+}
+```
+
+Both ends take the same optional scope list as plain `ignore` — omit it to strip
+from every enclosing snippet, list names to strip only from those:
+
+```java
+// extract-code ignore start lite, mobile
+// ...
+// extract-code ignore end lite, mobile
+```
+
+Details worth knowing:
+
+- Blocks **nest**. An `ignore end` closes the nearest unclosed `ignore start`
+  with the same scope list, falling back to the nearest unclosed one — so the
+  scope list doubles as a pairing label when blocks overlap.
+- An **unterminated** `ignore start` strips to end of file and logs a warning:
+  hiding too much is visible to you, whereas leaking what you meant to hide is
+  not. An `ignore end` with nothing open is skipped with a warning.
+- Because `start` and `end` are the block keywords, a snippet literally named
+  `start` or `end` can't be used as a scope name in the one-line
+  `extract-code ignore <names>` form.
 
 ## Ways to run it
 
@@ -232,7 +349,8 @@ npm test                                          # runs extractSnippets.test.mj
 `extractSnippets.test.mjs` drives `extractFromSource` directly — each case is a
 small source string paired with its expected snippet — and covers every marker
 use case across JS/TS/TSX and Java (whole-file mode, `ignore` scoping,
-terminators, decorator/annotation handling) plus regressions for the
+`ignore start`/`ignore end` blocks, additive segments, terminators,
+decorator/annotation handling) plus regressions for the
 annotation/`modifiers` extraction bug. It also re-extracts the committed
 `.github/smoke-test` fixtures so they stay in sync with the extractor. Add a
 test alongside any new marker behavior or language grammar.

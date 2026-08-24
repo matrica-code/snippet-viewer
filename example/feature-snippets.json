@@ -1,5 +1,7 @@
 {
   "overview@Example.java": "public class ExampleClass {\n\n    public void basic(Map<String, String> store) {\n        store.put(\"greeting\", \"hello\");\n    }\n\n}",
   "detail@Example.java": "public class ExampleClass {\n\n    public void basic(Map<String, String> store) {\n        store.put(\"greeting\", \"hello\");\n    }\n\n    public void advanced(Map<String, Integer> store) {\n        store.merge(\"visits\", 1, Integer::sum);\n    }\n}",
-  "data-storage@Example.java": "service.set(\"org.group\", \"key\", \"value\");\nString val = service.get(\"org.group\", \"key\");"
+  "data-storage@Example.java": "service.set(\"org.group\", \"key\", \"value\");\nString val = service.get(\"org.group\", \"key\");",
+  "wifi-connect@WifiSketch.ino": "#include <WiFi.h>\n\n#define WIFI_SSID \"my-network\"\n#define WIFI_PASS \"my-passphrase\"\n\nvoid connectWifi() {\n  WiFi.begin(WIFI_SSID, WIFI_PASS);\n  while (WiFi.status() != WL_CONNECTED) {\n    delay(500);\n  }\n}",
+  "sketch-setup@WifiSketch.ino": "void setup() {\n  connectWifi();\n  digitalWrite(LED_BUILTIN, HIGH);\n}"
 }

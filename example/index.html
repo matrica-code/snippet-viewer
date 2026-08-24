@@ -199,8 +199,8 @@
         <a href="https://github.com/matrica-code/snippet-viewer/tree/main/extractor"
           >snippet-extractor</a
         >
-        from a single annotated
-        <code>Example.java</code>, showing two marker capabilities.
+        from two annotated fixtures &mdash; <code>Example.java</code> and
+        <code>WifiSketch.ino</code> &mdash; showing four marker capabilities.
       </p>
 
       <h3>Reusing one class across snippets</h3>
@@ -254,6 +254,72 @@ service.flush();</code></pre>
       <snippet-viewer
         source="features"
         snippet="data-storage@Example.java"
+      ></snippet-viewer>
+
+      <h3>Additive snippets &mdash; combining scattered pieces</h3>
+      <p>
+        Reusing one name on several markers is <em>additive</em>: every marker
+        contributes a segment and they concatenate in source order. Native code
+        needs this &mdash; the include and the macros a function depends on live
+        in their own regions of the file, and neither the file nor the snippet
+        should be reshaped to bring them together:
+      </p>
+      <pre style="background:#1d1f21;color:#c5c8c6;padding:1rem;border-radius:6px;overflow-x:auto"><code>#include &lt;Arduino.h&gt;          // unmarked -&gt; not in the snippet
+
+// extract-code wifi-connect
+#include &lt;WiFi.h&gt;
+
+// extract-code wifi-connect
+#define WIFI_SSID "my-network"
+#define WIFI_PASS "my-passphrase"
+// extract-code end wifi-connect
+
+static int failures = 0;      // unmarked -&gt; not in the snippet
+
+// extract-code wifi-connect
+void connectWifi() {
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+  }
+}</code></pre>
+
+      <p>
+        One snippet, three segments joined with a blank line &mdash; and the
+        leading <code>#include</code> no longer triggers whole-file mode, since
+        the hand-composed segments are the point:
+      </p>
+      <snippet-viewer
+        source="features"
+        snippet="wifi-connect@WifiSketch.ino"
+      ></snippet-viewer>
+
+      <h3>Ignoring a block of lines</h3>
+      <p>
+        Plain <code>// extract-code ignore</code> drops the one node that
+        follows it. To drop a run of loose lines the AST wouldn't bundle &mdash;
+        setup boilerplate, option parsing &mdash; bracket it with
+        <code>ignore start</code> / <code>ignore end</code>. Both ends take the
+        same optional scope list, so a block can hide from one snippet and stay
+        in another:
+      </p>
+      <pre style="background:#1d1f21;color:#c5c8c6;padding:1rem;border-radius:6px;overflow-x:auto"><code>// extract-code sketch-setup
+void setup() {
+  // extract-code ignore start sketch-setup
+  Serial.begin(9600);
+  while (!Serial) {
+    delay(10);
+  }
+  pinMode(LED_BUILTIN, OUTPUT);
+  // extract-code ignore end sketch-setup
+  connectWifi();
+  digitalWrite(LED_BUILTIN, HIGH);
+}</code></pre>
+
+      <p>Captured snippet &mdash; boilerplate gone:</p>
+      <snippet-viewer
+        source="features"
+        snippet="sketch-setup@WifiSketch.ino"
       ></snippet-viewer>
     </div>
 

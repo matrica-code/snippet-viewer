@@ -453,6 +453,123 @@ test("un-scoped ignore still strips from every enclosing snippet", () => {
 });
 
 // ---------------------------------------------------------------------------
+// A marker nested inside a construct must not truncate a snippet that covers
+// the whole construct — the snippet keeps its closing brace. Regression: the
+// body-node list missed C/C++ `compound_statement`, so any marker inside a C
+// function body cut the enclosing snippet short.
+// ---------------------------------------------------------------------------
+test("C: a nested marker does not truncate the enclosing function", () => {
+  const src = [
+    `// extract-code full`,
+    `void setup() {`,
+    `  begin();`,
+    ``,
+    `  // extract-code inner`,
+    `  logging();`,
+    `}`,
+    ``,
+  ].join("\n");
+  const s = extract(src, ".c", "main.c");
+  assert.equal(s["full@main.c"], `void setup() {\n  begin();\n\n  logging();\n}`);
+  assert.equal(s["inner@main.c"], `logging();`);
+});
+
+test("ino: scoped ignores inside a sketch function keep the closing brace", () => {
+  // The Serial/BLINK tutorial shape: three snippets share one setup(), each
+  // hiding a different run of lines from itself.
+  const src = [
+    `// extract-code s4`,
+    `// extract-code s5`,
+    `// extract-code s8`,
+    `void setup() {`,
+    `  blink.setBoardType("kondra.arduino");`,
+    ``,
+    `  // extract-code ignore s4`,
+    `  arduinoIfaceNum = blink.addIface("kondra.arduino", 1, handlers);`,
+    ``,
+    `  // extract-code ignore s4`,
+    `  // extract-code ignore s5`,
+    `  // extract-code ignore s8`,
+    `  // extract-code s16`,
+    `  blink.addLoggerIface("kondra.arduino", "1", cb);`,
+    ``,
+    `  // extract-code ignore s4`,
+    `  // extract-code ignore s5`,
+    `  Serial.begin(BLINK_BAUD);`,
+    `}`,
+    ``,
+  ].join("\n");
+  const s = extract(src, ".ino", "Blink.ino");
+  for (const key of ["s4@Blink.ino", "s5@Blink.ino", "s8@Blink.ino"]) {
+    assert.match(s[key], /^void setup\(\) \{/, `${key} lost its opening line`);
+    assert.match(s[key], /\}$/, `${key} lost its closing brace`);
+    assert.doesNotMatch(s[key], /extract-code/);
+  }
+  assert.doesNotMatch(s["s4@Blink.ino"], /addIface|addLoggerIface|Serial\.begin/);
+  assert.match(s["s5@Blink.ino"], /addIface/);
+  assert.doesNotMatch(s["s5@Blink.ino"], /addLoggerIface|Serial\.begin/);
+  assert.match(s["s8@Blink.ino"], /addIface/);
+  assert.match(s["s8@Blink.ino"], /Serial\.begin/);
+  assert.doesNotMatch(s["s8@Blink.ino"], /addLoggerIface/);
+  assert.equal(s["s16@Blink.ino"], `blink.addLoggerIface("kondra.arduino", "1", cb);`);
+});
+
+test("Java: a nested marker does not truncate the enclosing method", () => {
+  const src = [
+    `// extract-code full`,
+    `public void run() {`,
+    `    setUp();`,
+    `    // extract-code inner`,
+    `    work();`,
+    `}`,
+    ``,
+  ].join("\n");
+  const s = extract(src, ".java", "C.java");
+  assert.match(s["full@C.java"], /\}$/);
+  assert.match(s["full@C.java"], /work\(\);/);
+});
+
+// ---------------------------------------------------------------------------
+// Removing lines leaves no pile of blank ones behind.
+// ---------------------------------------------------------------------------
+test("consecutive ignores do not leave a run of blank lines", () => {
+  const src = [
+    `// extract-code fn`,
+    `void setup() {`,
+    `  keep();`,
+    ``,
+    `  // extract-code ignore`,
+    `  dropA();`,
+    ``,
+    `  // extract-code ignore`,
+    `  dropB();`,
+    ``,
+    `  // extract-code ignore`,
+    `  dropC();`,
+    `}`,
+    ``,
+  ].join("\n");
+  const out = only(src, ".ino", "Blink.ino");
+  assert.doesNotMatch(out, /drop/);
+  assert.doesNotMatch(out, /\n[ \t]*\n[ \t]*\n/, "left a run of blank lines behind");
+  assert.equal(out, `void setup() {\n  keep();\n\n}`);
+});
+
+test("a snippet that loses nothing keeps its blank lines verbatim", () => {
+  const src = [
+    `// extract-code fn`,
+    `void setup() {`,
+    `  a();`,
+    ``,
+    ``,
+    `  b();`,
+    `}`,
+    ``,
+  ].join("\n");
+  assert.equal(only(src, ".ino", "Blink.ino"), `void setup() {\n  a();\n\n\n  b();\n}`);
+});
+
+// ---------------------------------------------------------------------------
 // Additive snippets: one <name> reused on several markers in a file collects
 // every marked piece, in source order, into a single snippet — for showing an
 // include and a macro alongside the code that uses them.

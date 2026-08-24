@@ -245,14 +245,20 @@ function resolveUnit(comment, cfg, source, root) {
 // `after`. Markers beyond this point belong to *members* of the construct
 // (e.g. method markers inside a class body) and must not truncate a snippet
 // that covers the whole construct.
-const BODY_RE = /(^block$|^statement_block$|body$|declaration_list$)/;
+// Found via Tree-sitter's `body` FIELD rather than a list of node type names:
+// every grammar names this edge `body`, whatever it calls the node on the other
+// end of it (JS/TS `statement_block`/`class_body`, Java `block`/`class_body`,
+// C/C++ `compound_statement`/`field_declaration_list`/`declaration_list`). A
+// name list has to be extended for each new grammar, and a missing entry
+// silently truncates every snippet covering a whole construct in that language.
 function firstBlockStart(node, after) {
   let best = Infinity;
   const stack = [node];
   while (stack.length) {
     const n = stack.pop();
-    if (n !== node && BODY_RE.test(n.type) && n.startIndex > after) {
-      best = Math.min(best, n.startIndex);
+    const body = n.childForFieldName?.("body");
+    if (body && body.startIndex > after) {
+      best = Math.min(best, body.startIndex);
       continue; // don't descend into a body we've already accounted for
     }
     for (let i = 0; i < n.namedChildCount; i++) stack.push(n.namedChild(i));
@@ -458,7 +464,15 @@ function extractFromSource(source, ext, snippets, basename) {
       text = text.slice(0, s - unit.segStart) + text.slice(e - unit.segStart);
     }
 
+    // Removing lines must not leave a pile of blank ones behind: when this
+    // snippet actually lost content (an ignore splice, or a member's marker
+    // line), collapse any run of blank lines to a single one. Snippets that lost
+    // nothing are left byte-for-byte as they appear in the source.
+    const before = text;
     text = stripMarkerLines(text);
+    if (inner.length || text !== before) {
+      text = text.replace(/\n[ \t]*\n(?:[ \t]*\n)+/g, "\n\n");
+    }
 
     // Re-indent to column 0, matching jscodeshift's toSource() output: the first
     // line already starts at the node, but continuation lines keep their in-source

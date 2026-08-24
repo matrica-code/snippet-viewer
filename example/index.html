@@ -115,13 +115,13 @@
       <h2>Named Sources (multiple snippet files)</h2>
       <p>
         With a manifest registered via
-        <code>&lt;meta name="snippet-sources" content="./sources.json"&gt;</code>,
-        each viewer can pull from a different file by naming a
-        <code>source</code>. The manifest here maps
-        <code>frontend</code> &rarr; <code>frontend-snippets.json</code>,
-        <code>java</code> &rarr; <code>java-snippets.json</code> and
-        <code>embedded</code> &rarr; <code>embedded-snippets.json</code> &mdash;
-        all produced by the snippet-extractor from the smoke-test fixtures.
+        <code>&lt;meta name="snippet-sources" content="./sources.json"&gt;</code
+        >, each viewer can pull from a different file by naming a
+        <code>source</code>. The manifest here maps <code>frontend</code> &rarr;
+        <code>frontend-snippets.json</code>, <code>java</code> &rarr;
+        <code>java-snippets.json</code> and <code>embedded</code> &rarr;
+        <code>embedded-snippets.json</code> - all produced by the
+        snippet-extractor from the smoke-test fixtures.
       </p>
 
       <p>A TypeScript class from the <code>frontend</code> source:</p>
@@ -152,8 +152,10 @@
         snippet="ino-setup@Blink.ino"
       ></snippet-viewer>
 
-      <p>A C++ class (its <code>api_key_</code> member is hidden by an
-      <code>extract-code ignore</code> marker):</p>
+      <p>
+        A C++ class (its <code>api_key_</code> member is hidden by an
+        <code>extract-code ignore</code> marker):
+      </p>
       <snippet-viewer
         source="embedded"
         snippet="cpp-class@RingBuffer.cpp"
@@ -172,7 +174,7 @@
       <p>
         A provider can set a default <code>source</code> for everything inside
         it (fetched once, shared). Any single viewer can still opt into a
-        different source &mdash; the last one below overrides
+        different source - the last one below overrides
         <code>frontend</code> with <code>java</code>:
       </p>
 
@@ -196,11 +198,12 @@
       <h2>Extractor Marker Features</h2>
       <p>
         These snippets are produced by the
-        <a href="https://github.com/matrica-code/snippet-viewer/tree/main/extractor"
+        <a
+          href="https://github.com/matrica-code/snippet-viewer/tree/main/extractor"
           >snippet-extractor</a
         >
-        from two annotated fixtures &mdash; <code>Example.java</code> and
-        <code>WifiSketch.ino</code> &mdash; showing four marker capabilities.
+        from two annotated fixtures - <code>Example.java</code> and
+        <code>WifiSketch.ino</code> - showing four marker capabilities.
       </p>
 
       <h3>Reusing one class across snippets</h3>
@@ -210,7 +213,15 @@
         <code>overview</code> snippet while <code>detail</code> keeps it — no
         need to duplicate the class:
       </p>
-      <pre style="background:#1d1f21;color:#c5c8c6;padding:1rem;border-radius:6px;overflow-x:auto"><code>// extract-code overview
+      <pre
+        style="
+          background: #1d1f21;
+          color: #c5c8c6;
+          padding: 1rem;
+          border-radius: 6px;
+          overflow-x: auto;
+        "
+      ><code>// extract-code overview
 // extract-code detail
 public class ExampleClass {
     public void basic(Map&lt;String, String&gt; store) {
@@ -243,7 +254,15 @@ public class ExampleClass {
         <code>service.flush()</code> falls outside the terminator and is
         excluded:
       </p>
-      <pre style="background:#1d1f21;color:#c5c8c6;padding:1rem;border-radius:6px;overflow-x:auto"><code>// extract-code data-storage
+      <pre
+        style="
+          background: #1d1f21;
+          color: #c5c8c6;
+          padding: 1rem;
+          border-radius: 6px;
+          overflow-x: auto;
+        "
+      ><code>// extract-code data-storage
 service.set("org.group", "key", "value");
 String val = service.get("org.group", "key");
 // extract-code end data-storage
@@ -256,15 +275,23 @@ service.flush();</code></pre>
         snippet="data-storage@Example.java"
       ></snippet-viewer>
 
-      <h3>Additive snippets &mdash; combining scattered pieces</h3>
+      <h3>Additive snippets - combining scattered pieces</h3>
       <p>
         Reusing one name on several markers is <em>additive</em>: every marker
         contributes a segment and they concatenate in source order. Native code
-        needs this &mdash; the include and the macros a function depends on live
-        in their own regions of the file, and neither the file nor the snippet
+        needs this - the include and the macros a function depends on live in
+        their own regions of the file, and neither the file nor the snippet
         should be reshaped to bring them together:
       </p>
-      <pre style="background:#1d1f21;color:#c5c8c6;padding:1rem;border-radius:6px;overflow-x:auto"><code>#include &lt;Arduino.h&gt;          // unmarked -&gt; not in the snippet
+      <pre
+        style="
+          background: #1d1f21;
+          color: #c5c8c6;
+          padding: 1rem;
+          border-radius: 6px;
+          overflow-x: auto;
+        "
+      ><code>#include &lt;Arduino.h&gt;          // unmarked -&gt; not in the snippet
 
 // extract-code wifi-connect
 #include &lt;WiFi.h&gt;
@@ -285,9 +312,9 @@ void connectWifi() {
 }</code></pre>
 
       <p>
-        One snippet, three segments joined with a blank line &mdash; and the
-        leading <code>#include</code> no longer triggers whole-file mode, since
-        the hand-composed segments are the point:
+        One snippet, three segments joined with a blank line - and the leading
+        <code>#include</code> no longer triggers whole-file mode, since the
+        hand-composed segments are the point:
       </p>
       <snippet-viewer
         source="features"
@@ -297,13 +324,21 @@ void connectWifi() {
       <h3>Ignoring a block of lines</h3>
       <p>
         Plain <code>// extract-code ignore</code> drops the one node that
-        follows it. To drop a run of loose lines the AST wouldn't bundle &mdash;
-        setup boilerplate, option parsing &mdash; bracket it with
+        follows it. To drop a run of loose lines the AST wouldn't bundle - setup
+        boilerplate, option parsing - bracket it with
         <code>ignore start</code> / <code>ignore end</code>. Both ends take the
         same optional scope list, so a block can hide from one snippet and stay
         in another:
       </p>
-      <pre style="background:#1d1f21;color:#c5c8c6;padding:1rem;border-radius:6px;overflow-x:auto"><code>// extract-code sketch-setup
+      <pre
+        style="
+          background: #1d1f21;
+          color: #c5c8c6;
+          padding: 1rem;
+          border-radius: 6px;
+          overflow-x: auto;
+        "
+      ><code>// extract-code sketch-setup
 void setup() {
   // extract-code ignore start sketch-setup
   Serial.begin(9600);
@@ -316,7 +351,7 @@ void setup() {
   digitalWrite(LED_BUILTIN, HIGH);
 }</code></pre>
 
-      <p>Captured snippet &mdash; boilerplate gone:</p>
+      <p>Captured snippet - boilerplate gone:</p>
       <snippet-viewer
         source="features"
         snippet="sketch-setup@WifiSketch.ino"
@@ -349,7 +384,8 @@ void setup() {
       function changeTheme(value) {
         const theme =
           value === "kondra-code"
-            ? new URL("./theme/prism-kondra-code.css", window.location.href).href
+            ? new URL("./theme/prism-kondra-code.css", window.location.href)
+                .href
             : value;
         document
           .querySelectorAll("snippet-viewer")

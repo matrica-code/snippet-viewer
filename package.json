@@ -1,0 +1,12 @@
+{
+  "name": "snippet-viewer",
+  "private": true,
+  "type": "module",
+  "description": "Web component that renders extracted code snippets. Tests: node --test",
+  "scripts": {
+    "test": "node --test snippet-viewer.test.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

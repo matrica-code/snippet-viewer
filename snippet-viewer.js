@@ -317,6 +317,11 @@
           languages.forEach((lang) => {
             const langScript = document.createElement("script");
             langScript.src = `${PRISM_CDN}/components/prism-${lang}.min.js`;
+            // Dynamically inserted scripts are async by default and run in
+            // arrival order. Prism components extend grammars registered by
+            // earlier components (tsx needs jsx and typescript), so force
+            // execution in the list order above.
+            langScript.async = false;
             langScript.onload = langScript.onerror = () => {
               loadedCount++;
               if (loadedCount === languages.length) {
@@ -335,6 +340,22 @@
     });
 
     return prismLoading;
+  }
+
+  // Highlight `codeElement` as `language` if Prism knows that grammar. When it
+  // doesn't, the element keeps the plain text already set on it — but say so,
+  // because a missing grammar is a loader bug, not a normal state.
+  function highlightWith(Prism, codeElement, language, label) {
+    if (!Prism) return false;
+    if (Prism.languages[language]) {
+      // Use highlightElement instead of highlight to trigger plugins
+      Prism.highlightElement(codeElement);
+      return true;
+    }
+    console.warn(
+      `snippet-viewer: no Prism grammar registered for "${language}" (${label}); rendering as plain text`,
+    );
+    return false;
   }
 
   class SnippetViewer extends HTMLElement {
@@ -605,10 +626,7 @@
       // Try to use Prism for syntax highlighting
       try {
         const Prism = await loadPrism();
-        if (Prism && Prism.languages[language]) {
-          // Use highlightElement instead of highlight to trigger plugins
-          Prism.highlightElement(codeElement);
-        }
+        highlightWith(Prism, codeElement, language, filenameText);
       } catch {
         // Fallback to plain text if Prism fails (already set above)
       }
@@ -768,6 +786,10 @@
   global.SnippetViewer.setTheme = setTheme;
   global.SnippetViewer.setSource = setSource;
   global.SnippetViewer.setSources = setSources;
+  // Exposed so a page can warm the Prism cache ahead of first render, and so
+  // the loader can be tested outside a browser.
+  global.SnippetViewer.loadPrism = loadPrism;
+  global.SnippetViewer.highlightWith = highlightWith;
   global.SnippetProvider = SnippetProvider;
   global.snippetCache = snippetCache;
 })(typeof window !== "undefined" ? window : this);

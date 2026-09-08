@@ -554,9 +554,41 @@ function main() {
   console.log(`extracted ${Object.keys(snippets).length} snippet(s) from ${scanned} file(s) -> ${snippetFile}`);
 }
 
+// ---------------------------------------------------------------------------
+// Entry-point detection
+// ---------------------------------------------------------------------------
 // Run as a CLI only when executed directly, so tests can import the internals.
-if (process.argv[1] && url.pathToFileURL(process.argv[1]).href === import.meta.url) {
-  main();
+//
+// `import.meta.url` is the *realpath* of this file, but `process.argv[1]` is the
+// path exactly as invoked. npm installs bins as symlinks (node_modules/.bin/...),
+// and on macOS even `/tmp` is a symlink, so the two only agree once argv[1] has
+// been resolved through every symlink as well.
+function isEntryPoint() {
+  const invoked = process.argv[1];
+  if (!invoked) return false;
+  try {
+    return url.pathToFileURL(fs.realpathSync(invoked)).href === import.meta.url;
+  } catch {
+    return false;
+  }
 }
 
-export { extractFromSource, extractFromFile, parseSnippetName, LANGUAGES };
+if (isEntryPoint()) {
+  main();
+} else if (process.argv.slice(2).some((arg) => arg.startsWith("--snippetFile"))) {
+  // Someone clearly meant to run the CLI, yet we were loaded as a module. Doing
+  // nothing here would exit 0 with no output and no snippet file — a CI step
+  // would go green having written nothing. Refuse loudly instead.
+  console.error(
+    [
+      "error: extractSnippets.mjs received --snippetFile but was not the process entry point, so the CLI did not run.",
+      `  entry point:  ${process.argv[1]}`,
+      `  this module:  ${url.fileURLToPath(import.meta.url)}`,
+      "  Invoke extractSnippets.mjs (or the snippet-extractor / extract-snippets bin) directly,",
+      "  or import { main } and call it yourself.",
+    ].join("\n"),
+  );
+  process.exit(1);
+}
+
+export { main, extractFromSource, extractFromFile, parseSnippetName, LANGUAGES };

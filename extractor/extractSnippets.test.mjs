@@ -1098,3 +1098,83 @@ test("smoke fixtures produce the expected snippet set", () => {
     assert.doesNotMatch(value, /sk-do-not-leak/);
   }
 });
+
+// ---------------------------------------------------------------------------
+// CLI entry-point detection (regression)
+// ---------------------------------------------------------------------------
+// Every test above imports the internals, so none of them exercised the
+// `is this module the process entry point?` guard. That guard compared the
+// as-invoked argv[1] against the realpath'd import.meta.url, so it was false
+// whenever a symlink sat anywhere in the path — which is how npm installs every
+// bin, and how macOS lays out /tmp. The CLI then exited 0 having done nothing.
+// These tests spawn the CLI the way consumers actually reach it.
+import os from "node:os";
+import { spawnSync } from "node:child_process";
+
+const cliPath = path.join(here, "extractSnippets.mjs");
+
+function cliSandbox() {
+  // os.tmpdir() on macOS is itself under a symlink (/var -> /private/var),
+  // but we add an explicit one too so the test bites on every platform.
+  const real = fs.mkdtempSync(path.join(os.tmpdir(), "snippet-cli-"));
+  fs.mkdirSync(path.join(real, "src"));
+  fs.writeFileSync(path.join(real, "src", "Thing.ts"), "// extract-code widget\nconst widget = 1;\n");
+  return real;
+}
+
+function runCli(entry, cwd, args) {
+  return spawnSync(process.execPath, [entry, ...args], { cwd, encoding: "utf8" });
+}
+
+function assertWroteSnippets(result, cwd, out) {
+  assert.equal(result.status, 0, `stderr: ${result.stderr}`);
+  assert.match(result.stdout, /^extracted 1 snippet\(s\) from 1 file\(s\) -> /);
+  const written = JSON.parse(fs.readFileSync(path.join(cwd, out), "utf8"));
+  assert.deepEqual(written, { "widget@Thing.ts": "const widget = 1;" });
+}
+
+test("CLI: runs when invoked through an npm-style bin symlink", () => {
+  const dir = cliSandbox();
+  const binDir = path.join(dir, "node_modules", ".bin");
+  fs.mkdirSync(binDir, { recursive: true });
+  const bin = path.join(binDir, "extract-snippets");
+  fs.symlinkSync(cliPath, bin);
+  assertWroteSnippets(runCli(bin, dir, ["--reset", "--snippetFile=out.json", "src"]), dir, "out.json");
+});
+
+test("CLI: runs when a parent directory of the script is a symlink", () => {
+  const dir = cliSandbox();
+  const link = path.join(dir, "linked-extractor");
+  fs.symlinkSync(here, link, "dir");
+  const viaLink = path.join(link, "extractSnippets.mjs");
+  assert.notEqual(fs.realpathSync(viaLink), viaLink, "sandbox did not produce a symlinked path");
+  assertWroteSnippets(runCli(viaLink, dir, ["--reset", "--snippetFile=out.json", "src"]), dir, "out.json");
+});
+
+test("CLI: runs when invoked by its plain path", () => {
+  const dir = cliSandbox();
+  assertWroteSnippets(runCli(cliPath, dir, ["--reset", "--snippetFile=out.json", "src"]), dir, "out.json");
+});
+
+test("CLI: fails loudly if --snippetFile is passed but the module is not the entry point", () => {
+  const dir = cliSandbox();
+  const wrapper = path.join(dir, "wrapper.mjs");
+  fs.writeFileSync(wrapper, `await import(${JSON.stringify(url.pathToFileURL(cliPath).href)});\n`);
+  const result = runCli(wrapper, dir, ["--reset", "--snippetFile=out.json", "src"]);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /was not the process entry point/);
+  assert.equal(fs.existsSync(path.join(dir, "out.json")), false);
+});
+
+test("CLI: importing the module without CLI arguments stays silent", () => {
+  const dir = cliSandbox();
+  const wrapper = path.join(dir, "wrapper.mjs");
+  fs.writeFileSync(
+    wrapper,
+    `const m = await import(${JSON.stringify(url.pathToFileURL(cliPath).href)});\nconsole.log(typeof m.main);\n`,
+  );
+  const result = runCli(wrapper, dir, []);
+  assert.equal(result.status, 0, `stderr: ${result.stderr}`);
+  assert.equal(result.stdout.trim(), "function");
+  assert.equal(result.stderr, "");
+});

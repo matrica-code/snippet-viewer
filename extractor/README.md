@@ -268,13 +268,16 @@ No install step needed — run the published package directly:
 npx @matrica-code/snippet-extractor --reset --snippetFile=snippets.json src
 ```
 
+(`npx <package>` runs the bin that shares the package's name, so the package
+ships a `snippet-extractor` bin; `extract-snippets` is kept as an alias.)
+
 Or add it as a dev dependency and wire a script:
 
 ```jsonc
 // package.json
 {
   "scripts": {
-    "snippets": "extract-snippets --reset --snippetFile=public/snippets.json src"
+    "snippets": "snippet-extractor --reset --snippetFile=public/snippets.json src"
   },
   "devDependencies": {
     "@matrica-code/snippet-extractor": "^1.0.0"

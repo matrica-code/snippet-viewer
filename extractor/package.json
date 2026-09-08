@@ -23,6 +23,7 @@
     "url": "https://github.com/matrica-code/snippet-viewer/issues"
   },
   "bin": {
+    "snippet-extractor": "extractSnippets.mjs",
     "extract-snippets": "extractSnippets.mjs"
   },
   "files": [

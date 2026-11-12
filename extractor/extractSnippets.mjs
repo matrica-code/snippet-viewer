@@ -62,6 +62,7 @@ const LANGUAGES = {
   ".cpp": { load: () => require("tree-sitter-cpp"), comments: ["comment"], wholeFile: ["preproc_include"], decorators: [] },
   ".c": { load: () => require("tree-sitter-c"), comments: ["comment"], wholeFile: ["preproc_include"], decorators: [] },
   ".ino": { load: () => require("tree-sitter-cpp"), comments: ["comment"], wholeFile: ["preproc_include"], decorators: [] },
+  ".xml": {load: () => require("tree-sitter-xml").xml, comments: ["comment"], wholeFile: [], decorators: []},
 };
 
 // Cache one Parser per extension so we don't reload grammars per file.

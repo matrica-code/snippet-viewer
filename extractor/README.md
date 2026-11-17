@@ -404,8 +404,10 @@ git push origin extractor-v1.0.3
 That fires two workflows:
 
 - `.github/workflows/extractor-npm.yml` → sets the package version to the tag's
-  version and publishes `@matrica-code/snippet-extractor` to npm (needs an
-  `NPM_TOKEN` repo secret).
+  version and publishes `@matrica-code/snippet-extractor` to npm through
+  [trusted publishing](https://docs.npmjs.com/trusted-publishers) (no token
+  secret; the package's Trusted Publisher on npmjs.com names this repo and
+  `extractor-npm.yml`).
 - `.github/workflows/extractor-image.yml` → builds the multi-arch image and pushes
   `ghcr.io/matrica-code/snippet-extractor:1.0.3` + `:latest` (uses the built-in
   `GITHUB_TOKEN`).

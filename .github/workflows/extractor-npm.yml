@@ -4,7 +4,10 @@ name: extractor-npm
 # The TAG is the source of truth for the version: pushing extractor-v1.2.3 sets
 # package.json to 1.2.3 at publish time. The committed version is just a default
 # used by manual workflow_dispatch runs.
-# Requires an NPM_TOKEN secret (Automation token) on the repo.
+#
+# Authenticates with npm trusted publishing (OIDC): no token secret. The package's
+# Trusted Publisher on npmjs.com must name this repo and this workflow file
+# (extractor-npm.yml). npm attaches provenance automatically.
 
 on:
   push:
@@ -15,6 +18,9 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # lets npm exchange the GitHub OIDC token for a publish credential
     defaults:
       run:
         working-directory: extractor
@@ -23,8 +29,12 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           registry-url: "https://registry.npmjs.org"
+
+      # Trusted publishing needs npm 11.5.1 or later.
+      - name: Update npm
+        run: npm install -g npm@^11.5.1
 
       - name: Set version from tag
         if: startsWith(github.ref, 'refs/tags/')
@@ -38,5 +48,3 @@ jobs:
 
       - name: Publish
         run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

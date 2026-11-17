@@ -2,16 +2,17 @@ name: extractor-smoke-test
 
 # Manual end-to-end test of the PUBLISHED snippet-extractor action.
 # Runs `matrica-code/snippet-viewer/extractor@main` over the fixtures in
-# .github/smoke-test/fixtures (TypeScript + Java + C/C++/Arduino, covering
+# .github/smoke-test/fixtures (TypeScript + Java + C/C++/Arduino + XML, covering
 # class / method / property markers and decorators/annotations), asserts the
 # output is correct, and attaches the generated snippets.json as a workflow
 # artifact.
 #
-# Four jobs:
-#   all-languages   — scans every fixture (15 snippets)
+# Five jobs:
+#   all-languages   — scans every fixture (18 snippets)
 #   typescript-only — scans just the TS/TSX fixtures (6 snippets)
 #   java-only       — scans just the Java fixtures (3 snippets)
 #   c-cpp-only      — scans just the C/C++/Arduino fixtures (6 snippets)
+#   xml-only        — scans just the XML (Maven pom) fixture (3 snippets)
 #
 # Run it from the Actions tab → "extractor-smoke-test" → "Run workflow".
 
@@ -32,7 +33,7 @@ jobs:
       # The action under test. Pin to extractor-vX.Y.Z to test a specific release;
       # `@main` always tests the current action definition on the default branch.
       - id: extract
-        name: Run published snippet-extractor action (TS + Java + C/C++)
+        name: Run published snippet-extractor action (TS + Java + C/C++ + XML)
         uses: matrica-code/snippet-viewer/extractor@main
         with:
           paths: .github/smoke-test/fixtures
@@ -130,3 +131,29 @@ jobs:
 
       - name: Validate (C/C++/Arduino)
         run: bash .github/smoke-test/validate.sh "${{ steps.extract.outputs.snippet-file }}" cpp
+
+  xml-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: extract
+        name: Run published snippet-extractor action (XML only)
+        uses: matrica-code/snippet-viewer/extractor@main
+        with:
+          paths: .github/smoke-test/fixtures/xml
+          snippet-file: smoke-test-snippets-xml.json
+          reset: "true"
+          image-tag: ${{ inputs.image-tag }}
+          upload-artifact: "true"
+          artifact-name: smoke-test-snippets-xml
+          artifact-retention-days: "7"
+
+      - name: Show generated snippets
+        run: |
+          echo "::group::smoke-test-snippets-xml.json"
+          cat smoke-test-snippets-xml.json
+          echo "::endgroup::"
+
+      - name: Validate (XML)
+        run: bash .github/smoke-test/validate.sh "${{ steps.extract.outputs.snippet-file }}" xml

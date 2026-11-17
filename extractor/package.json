@@ -2,12 +2,13 @@
   "name": "@matrica-code/snippet-extractor",
   "version": "1.0.2",
   "type": "module",
-  "description": "Multi-language (JS/TS/TSX/Java) extract-code snippet harvester. Produces the snippets.json consumed by snippet-viewer.",
+  "description": "Multi-language (JS/TS/TSX/Java/C/C++/XML) extract-code snippet harvester. Produces the snippets.json consumed by snippet-viewer.",
   "keywords": [
     "snippets",
     "code-snippets",
     "documentation",
     "tree-sitter",
+    "xml",
     "codemod",
     "extract-code",
     "snippet-viewer"
@@ -43,6 +44,7 @@
     "access": "public"
   },
   "dependencies": {
+    "@tree-sitter-grammars/tree-sitter-xml": "0.7.0",
     "tree-sitter": "^0.25.1",
     "tree-sitter-c": "^0.24.1",
     "tree-sitter-cpp": "^0.23.4",

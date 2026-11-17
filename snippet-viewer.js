@@ -276,6 +276,13 @@
     cxx: "cpp",
     hpp: "cpp",
     ino: "arduino",
+    // XML family. Prism core registers `xml` itself (an extension of `markup`),
+    // so these need no component in the loader list below.
+    xml: "xml",
+    xsd: "xml",
+    xsl: "xml",
+    xslt: "xml",
+    svg: "xml",
   };
 
   // Load Prism.js dynamically
@@ -790,6 +797,7 @@
   // the loader can be tested outside a browser.
   global.SnippetViewer.loadPrism = loadPrism;
   global.SnippetViewer.highlightWith = highlightWith;
+  global.SnippetViewer.languageMap = languageMap;
   global.SnippetProvider = SnippetProvider;
   global.snippetCache = snippetCache;
 })(typeof window !== "undefined" ? window : this);

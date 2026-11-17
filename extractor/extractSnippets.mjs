@@ -2,7 +2,8 @@
 // Portable, multi-language snippet extractor.
 //
 // Drop-in replacement for the jscodeshift-based extractSnippets.mjs that works
-// across JS/TS/TSX *and* Java (and any other Tree-sitter grammar you register).
+// across JS/TS/TSX, Java, C/C++/Arduino and XML (and any other Tree-sitter
+// grammar you register).
 //
 // Usage:
 //   node tools/codemod/extractSnippets.portable.mjs \
@@ -22,6 +23,8 @@
 //   // extract-code ignore start a, b / ignore end a, b
 //                                  -> same, scoped to snippets a and b
 //
+//   In XML the same directives are written as comments: <!-- extract-code <name> -->
+//
 //   Reusing one <name> on several markers in a file is *additive*: each marker
 //   contributes a segment and they are concatenated, in source order, into one
 //   snippet — for pulling an include, a macro and the code that uses them out of
@@ -35,9 +38,9 @@
 //     to the original, where ignore removal only affected AST-serialized nodes.
 
 import fs from "fs";
+import { createRequire } from "module";
 import path from "path";
 import url from "url";
-import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
 
@@ -49,20 +52,90 @@ const require = createRequire(import.meta.url);
 // declaration (JS/TS `@decorator`). Java annotations are NOT listed here: the
 // Java grammar folds them into the declaration's `modifiers`, so they are
 // captured automatically without sibling-walking.
+//
+// `bodies` lists node types that act as a construct's body in grammars that
+// don't name that edge with a `body` field (see `firstBlockStart`). XML has no
+// fields at all: an element is `STag` / `content` / `ETag`.
 // ---------------------------------------------------------------------------
 const LANGUAGES = {
-  ".ts": { load: () => require("tree-sitter-typescript").typescript, comments: ["comment"], wholeFile: ["import_statement"], decorators: ["decorator"] },
-  ".tsx": { load: () => require("tree-sitter-typescript").tsx, comments: ["comment"], wholeFile: ["import_statement"], decorators: ["decorator"] },
-  ".mts": { load: () => require("tree-sitter-typescript").typescript, comments: ["comment"], wholeFile: ["import_statement"], decorators: ["decorator"] },
-  ".cts": { load: () => require("tree-sitter-typescript").typescript, comments: ["comment"], wholeFile: ["import_statement"], decorators: ["decorator"] },
-  ".js": { load: () => require("tree-sitter-javascript"), comments: ["comment"], wholeFile: ["import_statement"], decorators: ["decorator"] },
-  ".jsx": { load: () => require("tree-sitter-javascript"), comments: ["comment"], wholeFile: ["import_statement"], decorators: ["decorator"] },
-  ".mjs": { load: () => require("tree-sitter-javascript"), comments: ["comment"], wholeFile: ["import_statement"], decorators: ["decorator"] },
-  ".java": { load: () => require("tree-sitter-java"), comments: ["line_comment", "block_comment"], wholeFile: ["import_declaration"], decorators: [] },
-  ".cpp": { load: () => require("tree-sitter-cpp"), comments: ["comment"], wholeFile: ["preproc_include"], decorators: [] },
-  ".c": { load: () => require("tree-sitter-c"), comments: ["comment"], wholeFile: ["preproc_include"], decorators: [] },
-  ".ino": { load: () => require("tree-sitter-cpp"), comments: ["comment"], wholeFile: ["preproc_include"], decorators: [] },
-  ".xml": {load: () => require("tree-sitter-xml").xml, comments: ["comment"], wholeFile: [], decorators: []},
+  ".ts": {
+    load: () => require("tree-sitter-typescript").typescript,
+    comments: ["comment"],
+    wholeFile: ["import_statement"],
+    decorators: ["decorator"],
+  },
+  ".tsx": {
+    load: () => require("tree-sitter-typescript").tsx,
+    comments: ["comment"],
+    wholeFile: ["import_statement"],
+    decorators: ["decorator"],
+  },
+  ".mts": {
+    load: () => require("tree-sitter-typescript").typescript,
+    comments: ["comment"],
+    wholeFile: ["import_statement"],
+    decorators: ["decorator"],
+  },
+  ".cts": {
+    load: () => require("tree-sitter-typescript").typescript,
+    comments: ["comment"],
+    wholeFile: ["import_statement"],
+    decorators: ["decorator"],
+  },
+  ".js": {
+    load: () => require("tree-sitter-javascript"),
+    comments: ["comment"],
+    wholeFile: ["import_statement"],
+    decorators: ["decorator"],
+  },
+  ".jsx": {
+    load: () => require("tree-sitter-javascript"),
+    comments: ["comment"],
+    wholeFile: ["import_statement"],
+    decorators: ["decorator"],
+  },
+  ".mjs": {
+    load: () => require("tree-sitter-javascript"),
+    comments: ["comment"],
+    wholeFile: ["import_statement"],
+    decorators: ["decorator"],
+  },
+  ".java": {
+    load: () => require("tree-sitter-java"),
+    comments: ["line_comment", "block_comment"],
+    wholeFile: ["import_declaration"],
+    decorators: [],
+  },
+  ".cpp": {
+    load: () => require("tree-sitter-cpp"),
+    comments: ["comment"],
+    wholeFile: ["preproc_include"],
+    decorators: [],
+  },
+  ".c": {
+    load: () => require("tree-sitter-c"),
+    comments: ["comment"],
+    wholeFile: ["preproc_include"],
+    decorators: [],
+  },
+  ".ino": {
+    load: () => require("tree-sitter-cpp"),
+    comments: ["comment"],
+    wholeFile: ["preproc_include"],
+    decorators: [],
+  },
+  ...Object.fromEntries(
+    [".xml", ".xsd", ".xsl", ".xslt"].map((ext) => [
+      ext,
+      {
+        load: () => require("@tree-sitter-grammars/tree-sitter-xml").xml,
+        comments: ["Comment"],
+        wholeFile: [],
+        decorators: [],
+        bodies: ["content"],
+      },
+    ]),
+  ),
 };
 
 // Cache one Parser per extension so we don't reload grammars per file.
@@ -87,9 +160,11 @@ function parseArgs(argv) {
   let reset = false;
   const paths = [];
   for (const arg of argv) {
-    if (arg.startsWith("--snippetFile=")) snippetFile = arg.slice("--snippetFile=".length);
+    if (arg.startsWith("--snippetFile="))
+      snippetFile = arg.slice("--snippetFile=".length);
     else if (arg === "--reset") reset = true;
-    else if (arg.startsWith("--")) continue; // ignore unknown flags (e.g. legacy jscodeshift flags)
+    else if (arg.startsWith("--"))
+      continue; // ignore unknown flags (e.g. legacy jscodeshift flags)
     else paths.push(arg);
   }
   return { snippetFile, reset, paths };
@@ -98,7 +173,15 @@ function parseArgs(argv) {
 // ---------------------------------------------------------------------------
 // File discovery
 // ---------------------------------------------------------------------------
-const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "build", ".next", "out", "coverage"]);
+const SKIP_DIRS = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  ".next",
+  "out",
+  "coverage",
+]);
 
 function* walk(target) {
   const stat = fs.statSync(target);
@@ -125,7 +208,8 @@ function collectComments(root, commentTypes) {
   while (stack.length) {
     const node = stack.pop();
     if (commentTypes.includes(node.type)) out.push(node);
-    for (let i = node.namedChildCount - 1; i >= 0; i--) stack.push(node.namedChild(i));
+    for (let i = node.namedChildCount - 1; i >= 0; i--)
+      stack.push(node.namedChild(i));
   }
   return out;
 }
@@ -133,17 +217,20 @@ function collectComments(root, commentTypes) {
 const MARKER = "extract-code";
 
 // A marker is a comment whose directive begins the comment body — `// extract-code
-// <name>`, not prose that merely mentions the word (e.g. "…up to `extract-code
+// <name>` (or `<!-- extract-code <name> -->`), not prose that merely mentions the word (e.g. "…up to `extract-code
 // end`."), which must never mint a spurious snippet.
 function isMarker(comment) {
-  const body = comment.text.replace(/^\s*(?:\/\/+|\/\*+|\*+)?\s*/, "");
+  const body = comment.text.replace(/^\s*(?:\/\/+|\/\*+|\*+|<!--)?\s*/, "");
   return /^extract-code(?:\s|$)/.test(body);
 }
 
 // A comma-separated scope list -> Set of snippet names, or null for "every
 // snippet" (the un-scoped form).
 function parseScope(text) {
-  const names = text.split(",").map((s) => s.trim()).filter(Boolean);
+  const names = text
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   return names.length ? new Set(names) : null;
 }
 
@@ -156,7 +243,7 @@ function parseScope(text) {
 //   extract-code ignore end   [a, b] -> { kind: "ignore-end", names }    (block close)
 function classifyMarker(commentText) {
   const after = (commentText.split(MARKER)[1] ?? "")
-    .replace(/\*\/\s*$/, "") // trailing block-comment close
+    .replace(/(?:\*\/|-->)\s*$/, "") // trailing block-comment / XML-comment close
     .replace(/\r?\n[\s\S]*$/, "") // anything past the first line
     .trim();
   const [head, ...rest] = after.split(/\s+/);
@@ -166,7 +253,10 @@ function classifyMarker(commentText) {
     // else after `ignore` is a scope list applying to the next node.
     const [sub, ...subRest] = rest;
     if (sub === "start" || sub === "end") {
-      return { kind: sub === "start" ? "ignore-start" : "ignore-end", names: parseScope(subRest.join(" ")) };
+      return {
+        kind: sub === "start" ? "ignore-start" : "ignore-end",
+        names: parseScope(subRest.join(" ")),
+      };
     }
     return { kind: "ignore", names: parseScope(tail) };
   }
@@ -216,7 +306,11 @@ function resolveUnit(comment, cfg, source, root) {
   // declaration and its leading `modifiers` share a start index, so this lifts
   // an annotation/`modifiers` up to the declaration it belongs to (e.g. a
   // marker on `public class` whose comment was parsed into `modifiers`).
-  while (node.parent && node.parent !== root && node.parent.startIndex === node.startIndex) {
+  while (
+    node.parent &&
+    node.parent !== root &&
+    node.parent.startIndex === node.startIndex
+  ) {
     node = node.parent;
   }
 
@@ -239,7 +333,12 @@ function resolveUnit(comment, cfg, source, root) {
   while (e < source.length && /\s/.test(source[e])) e++;
   if (source[e] === ";") endIndex = e + 1;
 
-  return { segStart: pos, maxEnd: endIndex, type: startNode.type, node: startNode };
+  return {
+    segStart: pos,
+    maxEnd: endIndex,
+    type: startNode.type,
+    node: startNode,
+  };
 }
 
 // Start index of the first block/body nested inside `node` that opens after
@@ -252,12 +351,18 @@ function resolveUnit(comment, cfg, source, root) {
 // C/C++ `compound_statement`/`field_declaration_list`/`declaration_list`). A
 // name list has to be extended for each new grammar, and a missing entry
 // silently truncates every snippet covering a whole construct in that language.
-function firstBlockStart(node, after) {
+// A grammar with no `body` field (XML) names its body node types in `bodies`.
+function firstBlockStart(node, after, bodies = []) {
   let best = Infinity;
   const stack = [node];
   while (stack.length) {
     const n = stack.pop();
-    const body = n.childForFieldName?.("body");
+    let body = n.childForFieldName?.("body");
+    if (!body && bodies.length) {
+      for (let i = 0; i < n.namedChildCount && !body; i++) {
+        if (bodies.includes(n.namedChild(i).type)) body = n.namedChild(i);
+      }
+    }
     if (body && body.startIndex > after) {
       best = Math.min(best, body.startIndex);
       continue; // don't descend into a body we've already accounted for
@@ -287,7 +392,10 @@ function parseSnippetName(commentText) {
 // is a tool instruction, not documentation — it must never surface in a
 // rendered snippet, including when a container snippet encloses a member's
 // marker (e.g. a class snippet that wraps its method markers).
-const MARKER_LINE_RE = new RegExp(String.raw`^[ \t]*(?:\/\/|\/\*)[ \t]*${MARKER}\b.*(?:\r?\n|$)`, "gm");
+const MARKER_LINE_RE = new RegExp(
+  String.raw`^[ \t]*(?:\/\/|\/\*|<!--)[ \t]*${MARKER}\b.*(?:\r?\n|$)`,
+  "gm",
+);
 function stripMarkerLines(text) {
   return text.replace(MARKER_LINE_RE, "");
 }
@@ -320,7 +428,8 @@ function extractFromSource(source, ext, snippets, basename) {
   const root = tree.rootNode;
 
   const comments = collectComments(root, cfg.comments);
-  const markers = comments.map((c) => ({ comment: c, ...classifyMarker(c.text) }))
+  const markers = comments
+    .map((c) => ({ comment: c, ...classifyMarker(c.text) }))
     .filter((m) => isMarker(m.comment))
     .sort((a, b) => a.comment.startIndex - b.comment.startIndex); // block ignores pair in source order
 
@@ -350,7 +459,10 @@ function extractFromSource(source, ext, snippets, basename) {
     if (m.kind !== "end" || !m.name) continue;
     const list = endByName.get(m.name) ?? [];
     list.push(m.comment.startIndex);
-    endByName.set(m.name, list.sort((a, b) => a - b));
+    endByName.set(
+      m.name,
+      list.sort((a, b) => a - b),
+    );
   }
 
   // Pass 1: gather ignore ranges (line-expanded) so node-mode snippets can splice
@@ -366,7 +478,11 @@ function extractFromSource(source, ext, snippets, basename) {
     if (m.kind === "ignore") {
       const unit = resolveUnit(m.comment, cfg, source, root);
       if (!unit) continue;
-      const [s, e] = expandToFullLines(source, m.comment.startIndex, unit.maxEnd);
+      const [s, e] = expandToFullLines(
+        source,
+        m.comment.startIndex,
+        unit.maxEnd,
+      );
       ignoreRanges.push({ s, e, names: m.names });
       continue;
     }
@@ -380,19 +496,31 @@ function extractFromSource(source, ext, snippets, basename) {
       // unclosed start, so nesting behaves like brackets.
       const idx = matchOpenIgnore(openIgnores, m.names);
       if (idx < 0) {
-        console.warn(`warning: ${basename}: \`${MARKER} ignore end\` with no open \`ignore start\` — skipped`);
+        console.warn(
+          `warning: ${basename}: \`${MARKER} ignore end\` with no open \`ignore start\` — skipped`,
+        );
         continue;
       }
       const [start] = openIgnores.splice(idx, 1);
-      const [s, e] = expandToFullLines(source, start.comment.startIndex, m.comment.endIndex);
+      const [s, e] = expandToFullLines(
+        source,
+        start.comment.startIndex,
+        m.comment.endIndex,
+      );
       ignoreRanges.push({ s, e, names: start.names });
     }
   }
   // An unterminated block ignore runs to end of file: hiding too much is visible
   // to the author, whereas leaking what they meant to hide is not.
   for (const start of openIgnores) {
-    console.warn(`warning: ${basename}: unterminated \`${MARKER} ignore start\` — ignoring to end of file`);
-    const [s, e] = expandToFullLines(source, start.comment.startIndex, source.length);
+    console.warn(
+      `warning: ${basename}: unterminated \`${MARKER} ignore start\` — ignoring to end of file`,
+    );
+    const [s, e] = expandToFullLines(
+      source,
+      start.comment.startIndex,
+      source.length,
+    );
     ignoreRanges.push({ s, e, names: start.names, open: true });
   }
 
@@ -419,17 +547,24 @@ function extractFromSource(source, ext, snippets, basename) {
     // belongs to that segment, not this one, so an additive name's segments each
     // bind to their own `extract-code end <name>` (or to none).
     const starts = startsByName.get(name) ?? [];
-    const nextSegment = starts.find((p) => p > m.comment.startIndex) ?? Infinity;
+    const nextSegment =
+      starts.find((p) => p > m.comment.startIndex) ?? Infinity;
 
     // An explicit terminator (`extract-code end <name>`) after this marker bounds
     // the snippet directly — for grouping loose statements the AST can't. The
     // earliest matching terminator past the start wins.
-    const ends = (endByName.get(name) ?? []).filter((p) => p > unit.segStart && p < nextSegment);
+    const ends = (endByName.get(name) ?? []).filter(
+      (p) => p > unit.segStart && p < nextSegment,
+    );
     const terminator = ends.length ? Math.min(...ends) : null;
 
     // Whole-file mode: marker leads an import -> emit the full source. Off for
     // additive names, whose segments are the point.
-    if (terminator == null && starts.length === 1 && cfg.wholeFile.includes(unit.type)) {
+    if (
+      terminator == null &&
+      starts.length === 1 &&
+      cfg.wholeFile.includes(unit.type)
+    ) {
       snippets[key] = stripMarkerLines(source).trimEnd() + "\n";
       continue;
     }
@@ -441,7 +576,7 @@ function extractFromSource(source, ext, snippets, basename) {
       // A snippet runs from its target to the maximal unit end, UNLESS a later
       // marker begins first (and before any nested body) — then it stops there,
       // so sibling markers partition a shared construct instead of overlapping.
-      const bodyStart = firstBlockStart(unit.node, unit.segStart);
+      const bodyStart = firstBlockStart(unit.node, unit.segStart, cfg.bodies);
       const boundary = Math.min(unit.maxEnd, bodyStart);
       endIndex = unit.maxEnd;
       for (const start of markerStarts) {
@@ -458,7 +593,12 @@ function extractFromSource(source, ext, snippets, basename) {
     const inner = ignoreRanges
       // A closed ignore must sit wholly inside the snippet; an `open` one (an
       // unterminated `ignore start`) runs past the end, so it clips to it.
-      .filter(({ s, e, open, names }) => s >= unit.segStart && (open || e <= endIndex) && (names == null || names.has(name)))
+      .filter(
+        ({ s, e, open, names }) =>
+          s >= unit.segStart &&
+          (open || e <= endIndex) &&
+          (names == null || names.has(name)),
+      )
       .map(({ s, e }) => ({ s, e: Math.min(e, endIndex) }))
       .sort((a, b) => b.s - a.s); // descending so earlier splices don't shift later offsets
     for (const { s, e } of inner) {
@@ -479,11 +619,19 @@ function extractFromSource(source, ext, snippets, basename) {
     // line already starts at the node, but continuation lines keep their in-source
     // indentation, so strip the node's base column from each subsequent line.
     let baseCol = 0;
-    while (unit.segStart - baseCol > 0 && source[unit.segStart - baseCol - 1] !== "\n") baseCol++;
+    while (
+      unit.segStart - baseCol > 0 &&
+      source[unit.segStart - baseCol - 1] !== "\n"
+    )
+      baseCol++;
     if (baseCol > 0) {
       text = text
         .split("\n")
-        .map((line, i) => (i === 0 ? line : line.replace(new RegExp(`^[ \\t]{0,${baseCol}}`), "")))
+        .map((line, i) =>
+          i === 0
+            ? line
+            : line.replace(new RegExp(`^[ \\t]{0,${baseCol}}`), ""),
+        )
         .join("\n");
     }
 
@@ -552,7 +700,9 @@ function main() {
 
   fs.mkdirSync(path.dirname(snippetFile), { recursive: true });
   fs.writeFileSync(snippetFile, JSON.stringify(snippets, null, 2) + "\n");
-  console.log(`extracted ${Object.keys(snippets).length} snippet(s) from ${scanned} file(s) -> ${snippetFile}`);
+  console.log(
+    `extracted ${Object.keys(snippets).length} snippet(s) from ${scanned} file(s) -> ${snippetFile}`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -576,7 +726,9 @@ function isEntryPoint() {
 
 if (isEntryPoint()) {
   main();
-} else if (process.argv.slice(2).some((arg) => arg.startsWith("--snippetFile"))) {
+} else if (
+  process.argv.slice(2).some((arg) => arg.startsWith("--snippetFile"))
+) {
   // Someone clearly meant to run the CLI, yet we were loaded as a module. Doing
   // nothing here would exit 0 with no output and no snippet file — a CI step
   // would go green having written nothing. Refuse loudly instead.
@@ -592,4 +744,10 @@ if (isEntryPoint()) {
   process.exit(1);
 }
 
-export { main, extractFromSource, extractFromFile, parseSnippetName, LANGUAGES };
+export {
+  extractFromFile,
+  extractFromSource,
+  LANGUAGES,
+  main,
+  parseSnippetName,
+};

@@ -1,5 +1,5 @@
 name: "Extract Snippets"
-description: "Harvest // extract-code snippets into a snippets.json (JS/TS/TSX/Java) for snippet-viewer."
+description: "Harvest // extract-code snippets into a snippets.json (JS/TS/TSX/Java/C/C++/XML) for snippet-viewer."
 author: "matrica-code"
 branding:
   icon: "scissors"

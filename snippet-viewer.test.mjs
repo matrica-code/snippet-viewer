@@ -20,8 +20,9 @@ const here = path.dirname(url.fileURLToPath(import.meta.url));
 const viewerSource = fs.readFileSync(path.join(here, "snippet-viewer.js"), "utf8");
 
 // Which grammars each Prism component needs to find already registered. Only
-// the ones the viewer loads; core ships markup/javascript/css/clike.
-const PRISM_CORE = ["markup", "css", "clike", "javascript"];
+// the ones the viewer loads; core ships markup (plus its xml alias),
+// javascript, css and clike.
+const PRISM_CORE = ["markup", "xml", "css", "clike", "javascript"];
 const PRISM_DEPS = {
   typescript: ["javascript"],
   jsx: ["markup", "javascript"],
@@ -162,5 +163,15 @@ test("highlightWith highlights when the grammar exists and warns when it does no
     assert.equal(highlightWith(null, el, "tsx", "x.tsx"), false);
   } finally {
     console.warn = origWarn;
+  }
+});
+
+test("XML-family extensions highlight with Prism's core xml grammar", async () => {
+  const viewer = loadViewer({ arrival: identity });
+  const { languageMap } = viewer.ctx.SnippetViewer;
+  const { Prism } = await loadPrismFully(viewer);
+  for (const ext of ["xml", "xsd", "xsl", "xslt", "svg"]) {
+    assert.equal(languageMap[ext], "xml", `${ext} is not mapped to xml`);
+    assert.ok(Prism.languages[languageMap[ext]], `no grammar registered for ${ext}`);
   }
 });

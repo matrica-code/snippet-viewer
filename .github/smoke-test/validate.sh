@@ -2,14 +2,14 @@
 # Validates a snippets.json produced by the snippet-extractor smoke test.
 #
 # Usage: validate.sh <snippets.json> <mode>
-#   mode = ts | java | cpp | all   (which language's snippets to require)
+#   mode = ts | java | cpp | xml | all   (which language's snippets to require)
 #
 # Asserts the expected keys exist, each carries its decorator/annotation token,
 # the `ignore` marker stripped the planted secret, and the total count matches.
 set -euo pipefail
 
-FILE="${1:?usage: validate.sh <snippets.json> <ts|java|cpp|all>}"
-MODE="${2:?usage: validate.sh <snippets.json> <ts|java|cpp|all>}"
+FILE="${1:?usage: validate.sh <snippets.json> <ts|java|cpp|xml|all>}"
+MODE="${2:?usage: validate.sh <snippets.json> <ts|java|cpp|xml|all>}"
 
 test -f "$FILE" || { echo "❌ $FILE was not produced"; exit 1; }
 jq -e . "$FILE" >/dev/null || { echo "❌ $FILE is not valid JSON"; exit 1; }
@@ -58,6 +58,14 @@ if [ "$MODE" = "cpp" ] || [ "$MODE" = "all" ]; then
   assert_key "ino-setup@Blink.ino"        "void setup"       # Arduino entry points
   assert_key "ino-loop@Blink.ino"         "void loop"
   want=$((want + 6))
+fi
+
+if [ "$MODE" = "xml" ] || [ "$MODE" = "all" ]; then
+  echo "── XML (Maven pom) ──────────────────────────"
+  assert_key "pom-coordinates@pom.xml"  "<artifactId>widget-service</artifactId>" # terminator-grouped siblings
+  assert_key "pom-dependencies@pom.xml" "</dependencies>"                         # not truncated by the nested marker
+  assert_key "pom-dependency@pom.xml"   "spring-boot-starter-web"                 # nested element
+  want=$((want + 3))
 fi
 
 echo "── ignore marker ────────────────────────────"

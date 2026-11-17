@@ -2,8 +2,8 @@
 //
 // These drive extractFromSource() directly (no filesystem) so each case is a
 // small, readable source string paired with its expected snippet output. The
-// suite covers every documented marker use case across JS/TS/TSX, Java and
-// C/C++/Arduino, plus regression tests for the annotation/`modifiers`
+// suite covers every documented marker use case across JS/TS/TSX, Java,
+// C/C++/Arduino and XML, plus regression tests for the annotation/`modifiers`
 // extraction bug.
 
 import { test } from "node:test";
@@ -282,6 +282,116 @@ test("ino: extracts Arduino sketch functions via the C++ grammar", () => {
     ``,
   ].join("\n");
   assert.equal(only(src, ".ino", "Blink.ino"), `void setup() {\n  Serial.begin(9600);\n}`);
+});
+
+// ---------------------------------------------------------------------------
+// XML (markers are <!-- extract-code ... --> comments)
+// ---------------------------------------------------------------------------
+const POM_HEAD = [`<?xml version="1.0" encoding="UTF-8"?>`, `<project>`];
+
+test("XML: extracts an element, re-indented to column 0", () => {
+  const src = [
+    ...POM_HEAD,
+    `  <!-- extract-code coords -->`,
+    `  <parent>`,
+    `    <groupId>com.example</groupId>`,
+    `  </parent>`,
+    `</project>`,
+    ``,
+  ].join("\n");
+  assert.equal(only(src, ".xml", "pom.xml"), `<parent>\n  <groupId>com.example</groupId>\n</parent>`);
+});
+
+test("XML: keys snippets with the xml basename", () => {
+  const src = [...POM_HEAD, `  <!-- extract-code v -->`, `  <version>1.0</version>`, `</project>`, ``].join("\n");
+  assert.deepEqual(extract(src, ".xml", "pom.xml"), { "v@pom.xml": `<version>1.0</version>` });
+});
+
+test("XML: a marker on the root element captures the root element", () => {
+  const src = [`<?xml version="1.0"?>`, `<!-- extract-code all -->`, `<project>`, `  <a/>`, `</project>`, ``].join("\n");
+  assert.equal(only(src, ".xml"), `<project>\n  <a/>\n</project>`);
+});
+
+test("XML: a nested marker does not truncate the enclosing element", () => {
+  const src = [
+    ...POM_HEAD,
+    `  <!-- extract-code deps -->`,
+    `  <dependencies>`,
+    `    <!-- extract-code junit -->`,
+    `    <dependency>`,
+    `      <artifactId>junit</artifactId>`,
+    `    </dependency>`,
+    `  </dependencies>`,
+    `</project>`,
+    ``,
+  ].join("\n");
+  const snippets = extract(src, ".xml", "pom.xml");
+  assert.equal(
+    snippets["deps@pom.xml"],
+    `<dependencies>\n  <dependency>\n    <artifactId>junit</artifactId>\n  </dependency>\n</dependencies>`,
+  );
+  assert.equal(snippets["junit@pom.xml"], `<dependency>\n  <artifactId>junit</artifactId>\n</dependency>`);
+});
+
+test("XML: ignore strips an element from an enclosing snippet", () => {
+  const src = [
+    ...POM_HEAD,
+    `  <!-- extract-code deps -->`,
+    `  <dependencies>`,
+    `    <dependency><artifactId>keep</artifactId></dependency>`,
+    `    <!-- extract-code ignore -->`,
+    `    <dependency><artifactId>sk-do-not-leak</artifactId></dependency>`,
+    `  </dependencies>`,
+    `</project>`,
+    ``,
+  ].join("\n");
+  const out = only(src, ".xml", "pom.xml");
+  assert.doesNotMatch(out, /sk-do-not-leak/);
+  assert.doesNotMatch(out, /extract-code/);
+  assert.match(out, /<artifactId>keep<\/artifactId>/);
+});
+
+test("XML: block ignore strips a run of sibling elements", () => {
+  const src = [
+    ...POM_HEAD,
+    `  <!-- extract-code props -->`,
+    `  <properties>`,
+    `    <java.version>21</java.version>`,
+    `    <!-- extract-code ignore start -->`,
+    `    <secret>sk-do-not-leak</secret>`,
+    `    <other>x</other>`,
+    `    <!-- extract-code ignore end -->`,
+    `  </properties>`,
+    `</project>`,
+    ``,
+  ].join("\n");
+  assert.equal(only(src, ".xml", "pom.xml"), `<properties>\n  <java.version>21</java.version>\n</properties>`);
+});
+
+test("XML: a terminator groups a run of sibling elements", () => {
+  const src = [
+    ...POM_HEAD,
+    `  <!-- extract-code coords -->`,
+    `  <groupId>com.example</groupId>`,
+    `  <artifactId>widget</artifactId>`,
+    `  <!-- extract-code end coords -->`,
+    `  <version>1.0</version>`,
+    `</project>`,
+    ``,
+  ].join("\n");
+  assert.equal(only(src, ".xml", "pom.xml"), `<groupId>com.example</groupId>\n<artifactId>widget</artifactId>`);
+});
+
+test("XML: prose in a comment that mentions extract-code is not a marker", () => {
+  const src = [...POM_HEAD, `  <!-- see extract-code docs -->`, `  <a/>`, `</project>`, ``].join("\n");
+  assert.deepEqual(extract(src, ".xml"), {});
+});
+
+test("XML: .xsd, .xsl and .xslt use the XML grammar", () => {
+  for (const ext of [".xsd", ".xsl", ".xslt"]) {
+    const src = [`<root>`, `  <!-- extract-code n -->`, `  <a/>`, `</root>`, ``].join("\n");
+    assert.equal(only(src, ext), `<a/>`, ext);
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -1081,6 +1191,9 @@ test("smoke fixtures produce the expected snippet set", () => {
       "java-class@WidgetService.java",
       "java-method@WidgetMembers.java",
       "java-property@WidgetMembers.java",
+      "pom-coordinates@pom.xml",
+      "pom-dependencies@pom.xml",
+      "pom-dependency@pom.xml",
       "react-component@Counter.tsx",
       "react-hook@Counter.tsx",
       "react-props@Counter.tsx",

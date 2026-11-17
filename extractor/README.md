@@ -5,7 +5,8 @@ markers out of source files into a `snippets.json` keyed `name@filename.ext` —
 exactly the format the [`<snippet-viewer>`](../README.md) web component renders.
 
 Parses with [Tree-sitter](https://tree-sitter.github.io/), so it works across
-**JS / TS / TSX and Java** (more grammars can be registered — see below).
+**JS / TS / TSX, Java, C / C++ / Arduino and XML** (more grammars can be
+registered — see [Developing the extractor](#developing-the-extractor)).
 
 ## Markers
 
@@ -22,6 +23,36 @@ Reusing one `<name>` on several markers in a file is **additive** — the pieces
 concatenate into a single snippet. See [Additive snippets](#additive-snippets).
 
 If the marked node is an `import`, the **whole file** is emitted.
+
+### XML (pom.xml and friends)
+
+`.xml`, `.xsd`, `.xsl` and `.xslt` files take the same directives written as XML
+comments. A marker captures the element that follows it, with its children:
+
+```xml
+<!-- extract-code deps -->
+<dependencies>
+  <!-- extract-code junit -->        <!-- nested marker: its own snippet; deps still gets the whole block -->
+  <dependency>
+    <groupId>junit</groupId>
+    <artifactId>junit</artifactId>
+  </dependency>
+  <!-- extract-code ignore -->       <!-- stripped from deps -->
+  <dependency>
+    <groupId>com.example.internal</groupId>
+    <artifactId>private-lib</artifactId>
+  </dependency>
+</dependencies>
+
+<!-- extract-code coords -->         <!-- loose sibling elements: group with a terminator -->
+<groupId>com.example</groupId>
+<artifactId>widget</artifactId>
+<version>1.0.0</version>
+<!-- extract-code end coords -->
+```
+
+XML has no import, so it has no whole-file trigger. A marker before the root
+element captures the root element (everything except the `<?xml ?>` prolog).
 
 ### Extent of a snippet
 
@@ -344,14 +375,15 @@ cd extractor && npm install --legacy-peer-deps   # once, to pull the Tree-sitter
 npm test                                          # runs extractSnippets.test.mjs via `node --test`
 ```
 
-> The `--legacy-peer-deps` flag is currently required: `tree-sitter-java`
-> declares a peer range that predates the pinned `tree-sitter` version, so a
+> The `--legacy-peer-deps` flag is currently required: several grammars
+> (`tree-sitter-c`, `tree-sitter-java`, `@tree-sitter-grammars/tree-sitter-xml`, …)
+> declare peer ranges that predate the pinned `tree-sitter` version, so a
 > plain `npm install` fails with `ERESOLVE`. It's a benign resolution mismatch —
 > the grammars build and run fine.
 
 `extractSnippets.test.mjs` drives `extractFromSource` directly — each case is a
 small source string paired with its expected snippet — and covers every marker
-use case across JS/TS/TSX and Java (whole-file mode, `ignore` scoping,
+use case across JS/TS/TSX, Java, C/C++/Arduino and XML (whole-file mode, `ignore` scoping,
 `ignore start`/`ignore end` blocks, additive segments, terminators,
 decorator/annotation handling) plus regressions for the
 annotation/`modifiers` extraction bug. It also re-extracts the committed
@@ -394,9 +426,96 @@ extractSnippets.mjs --snippetFile=<path> [--reset] <dir-or-file> [<dir-or-file> 
 | `--reset`              | Start from `{}` instead of merging.                                       |
 | `<dir-or-file> ...`    | Roots to scan recursively (`node_modules`, `dist`, `.git`, etc. skipped). |
 
-## Adding a language
+## Developing the extractor
 
-Register an entry in `LANGUAGES` in `extractSnippets.mjs`: the file extension, a
-`load()` returning the grammar, the grammar's comment node types, and which node
-type triggers whole-file mode. (Prism in the viewer already highlights many
-languages; extraction just needs the matching Tree-sitter grammar as a dep.)
+The extractor is a plain Node script with no build step. The npm package, the
+GitHub Action and the container image all run this same `extractSnippets.mjs`,
+so what you see running it from the checkout is what consumers get.
+
+### 1. Set up (once)
+
+```bash
+cd extractor
+npm install --legacy-peer-deps   # see the Testing note on this flag
+```
+
+### 2. Add a language
+
+Install the grammar, then register it in `LANGUAGES` in `extractSnippets.mjs`:
+
+```bash
+npm install <tree-sitter-grammar-package> --legacy-peer-deps
+```
+
+| Field        | Meaning                                                                          |
+| ------------ | -------------------------------------------------------------------------------- |
+| key          | The file extension, e.g. `".xml"`.                                               |
+| `load()`     | Returns the grammar.                                                             |
+| `comments`   | The grammar's comment node types (where markers live).                           |
+| `wholeFile`  | Node types that, when marked, emit the whole file (an import or include).        |
+| `decorators` | Node types that precede a declaration as siblings (JS/TS `@decorator`).          |
+| `bodies`     | Body node types, only for a grammar with no `body` field (XML has no fields).    |
+
+Leaving out `bodies` when the grammar needs it makes a marker nested inside a
+construct truncate the snippet that covers the whole construct.
+
+### 3. Run it on real files
+
+Point the script at any file or directory on disk and read the JSON:
+
+```bash
+node extractSnippets.mjs --reset --snippetFile=/tmp/out.json path/to/sample.ext
+jq . /tmp/out.json
+```
+
+Edit the extractor and re-run; there is nothing to rebuild.
+
+### 4. See it rendered
+
+Use the [test harness](#test-harness-live-preview): set the filename to one with
+the new extension and paste in your sample file.
+
+- The harness loads the extractor once at startup. After editing
+  `extractSnippets.mjs`, restart it (`npm run harness:stop && npm run harness`),
+  or start it as `node --watch harness.mjs` to restart on every save.
+- It reads `../snippet-viewer.js` from disk on every request, so viewer changes
+  only need a page reload.
+- Highlighting needs the extension mapped in `languageMap` in
+  `snippet-viewer.js`. If Prism's grammar for the language isn't in Prism core,
+  also add it to the component list in `loadPrism`. Without that the snippet
+  renders as plain text and the console logs
+  `no Prism grammar registered for …`.
+
+### 5. Lock it in with tests
+
+- Add cases to `extractSnippets.test.mjs`.
+- Add a sample file under `.github/smoke-test/fixtures/<lang>/`, then add its
+  keys to the "smoke fixtures produce the expected snippet set" test and a mode
+  for it to `.github/smoke-test/validate.sh`.
+
+```bash
+npm test                                   # extractor tests (in extractor/)
+(cd .. && npm test)                        # viewer tests
+node extractSnippets.mjs --reset --snippetFile=/tmp/out.json ../.github/smoke-test/fixtures
+bash ../.github/smoke-test/validate.sh /tmp/out.json all   # the checks CI runs
+```
+
+### 6. Try it in a real project
+
+Run the checkout's script against the project, with nothing installed there:
+
+```bash
+cd ~/Code/some-project
+node ~/Code/snippet-viewer/extractor/extractSnippets.mjs --reset --snippetFile=docs/snippets.json src
+```
+
+To test it as an installed package, publish a prerelease to a local registry
+(such as Verdaccio) and `npm install @matrica-code/snippet-extractor` in the
+project. The registry refuses a version it already has, so set a new one first,
+and revert `package.json` afterwards:
+
+```bash
+cd extractor
+npm version 1.0.3-dev.0 --no-git-tag-version
+npm publish
+```

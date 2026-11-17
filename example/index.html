@@ -119,8 +119,9 @@
         >, each viewer can pull from a different file by naming a
         <code>source</code>. The manifest here maps <code>frontend</code> &rarr;
         <code>frontend-snippets.json</code>, <code>java</code> &rarr;
-        <code>java-snippets.json</code> and <code>embedded</code> &rarr;
-        <code>embedded-snippets.json</code> - all produced by the
+        <code>java-snippets.json</code>, <code>embedded</code> &rarr;
+        <code>embedded-snippets.json</code> and <code>xml</code> &rarr;
+        <code>xml-snippets.json</code> - all produced by the
         snippet-extractor from the smoke-test fixtures.
       </p>
 
@@ -165,6 +166,37 @@
       <snippet-viewer
         source="embedded"
         snippet="c-function@sensor.c"
+      ></snippet-viewer>
+    </div>
+
+    <!-- Section: XML -->
+    <div class="section">
+      <h2>XML (Maven pom.xml)</h2>
+      <p>
+        The extractor also reads <code>.xml</code>, <code>.xsd</code>,
+        <code>.xsl</code> and <code>.xslt</code> files (via the Tree-sitter XML
+        grammar), with markers written as XML comments:
+        <code>&lt;!-- extract-code &lt;name&gt; --&gt;</code>. These come from
+        the <code>xml</code> source:
+      </p>
+
+      <p>
+        The dependencies block. A nested marker on one dependency doesn't cut
+        this snippet short, and an internal dependency is hidden by an
+        <code>extract-code ignore</code> marker:
+      </p>
+      <snippet-viewer
+        source="xml"
+        snippet="pom-dependencies@pom.xml"
+      ></snippet-viewer>
+
+      <p>
+        Loose sibling elements grouped with an
+        <code>extract-code end</code> terminator:
+      </p>
+      <snippet-viewer
+        source="xml"
+        snippet="pom-coordinates@pom.xml"
       ></snippet-viewer>
     </div>
 

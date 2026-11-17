@@ -1,0 +1,5 @@
+{
+  "pom-coordinates@pom.xml": "<groupId>com.example</groupId>\n<artifactId>widget-service</artifactId>\n<version>1.0.0</version>",
+  "pom-dependencies@pom.xml": "<dependencies>\n  <dependency>\n    <groupId>org.springframework.boot</groupId>\n    <artifactId>spring-boot-starter-web</artifactId>\n  </dependency>\n</dependencies>",
+  "pom-dependency@pom.xml": "<dependency>\n  <groupId>org.springframework.boot</groupId>\n  <artifactId>spring-boot-starter-web</artifactId>\n</dependency>"
+}

@@ -3,5 +3,6 @@
   "java": "./java-snippets.json",
   "frontend": "./frontend-snippets.json",
   "features": "./feature-snippets.json",
-  "embedded": "./embedded-snippets.json"
+  "embedded": "./embedded-snippets.json",
+  "xml": "./xml-snippets.json"
 }
